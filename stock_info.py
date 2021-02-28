@@ -1,7 +1,8 @@
+import os
 from datetime import datetime, timezone, timedelta
 
-import os
 import requests
+from dateutil import tz
 from discord.ext import commands
 from dotenv import load_dotenv
 from yahoo_fin import stock_info as si
@@ -14,18 +15,20 @@ TEST_TOKEN = os.getenv('TEST_TOKEN')
 REAL_TOKEN = os.getenv('REAL_TOKEN')
 
 message_str = '{code} ({full_name}) : ${current_price} ' \
-              'Daily Change: ${daily_change_amt} ({daily_change_percent}%)'
+              'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}'
 
 
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)')
 async def stock_price_cmd(ctx, code):
+    wsb_info = get_wsb_hits(code)
     try:
         price_data = get_stock_price_data(code)
         await ctx.send(message_str.format(code=code.upper(),
                                           full_name=price_data['name'],
                                           current_price=price_data['current_price'],
                                           daily_change_amt=price_data['daily_change_amt'],
-                                          daily_change_percent=price_data['daily_change_percent']))
+                                          daily_change_percent=price_data['daily_change_percent'],
+                                          wsb_info=wsb_info))
     except (AssertionError, KeyError):
         await ctx.send('Unable to find price information for ' + code.upper())
 
@@ -38,7 +41,8 @@ async def crypto_price_cmd(ctx, code):
                                           full_name=crypto_data['name'],
                                           current_price=crypto_data['current_price'],
                                           daily_change_amt=crypto_data['daily_change_amt'],
-                                          daily_change_percent=crypto_data['daily_change_percent']))
+                                          daily_change_percent=crypto_data['daily_change_percent'],
+                                          wsb_info=''))
     except KeyError:
         help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
                        ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
@@ -89,6 +93,29 @@ def get_stock_price_data(code):
             'current_price': str(round(current_price, 2)),
             'daily_change_amt': str(daily_change_amt),
             'daily_change_percent': str(daily_change_percent)}
+
+
+def get_wsb_hits(code):
+    date = datetime.now(timezone.utc).astimezone(tz=tz.gettz("GMT"))
+    today = str(int(date.timestamp()))
+    one_day_ago = str(int((date - timedelta(days=2)).astimezone(tz=tz.gettz("GMT")).timestamp()))
+    url = 'https://elastic.pushshift.io/rc/comments/_search?source=' \
+          '{"query":{"bool":{"must":[{"simple_query_string":{"query":"%(code)s","fields":["body"],' \
+          '"default_operator":"and"}}],"filter":[{"range":{"created_utc":{"gte":%(one_day_ago)s,"lte":%(today)s}}},' \
+          '{"terms":{"subreddit":["wallstreetbets"]}}],"should":[],"must_not":[]}},' \
+          '"size":100,"sort":{"created_utc":"desc"}}'
+
+    try:
+        formatted_url = (url % {'code': code, 'today': today, 'one_day_ago': one_day_ago})
+        response_data = requests.get(formatted_url, headers={'referer': 'https://redditsearch.io/',
+                                                             'origin': 'https://redditsearch.io'}).json()
+        hits = response_data['hits']['total']
+    except Exception:
+        hits = 0
+    if hits > 0:
+        return ' {hits} hits on r/wallstreetbets in the last 24 hours'.format(hits=hits)
+    else:
+        return ''
 
 
 bot.run(REAL_TOKEN)
