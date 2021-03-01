@@ -2,7 +2,6 @@ import os
 from datetime import datetime, timezone, timedelta
 
 import requests
-from dateutil import tz
 from discord.ext import commands
 from dotenv import load_dotenv
 from yahoo_fin import stock_info as si
@@ -78,9 +77,9 @@ def get_stock_price_data(code):
     date = datetime.now(timezone.utc)
     day_of_week = date.weekday()
     daily_data = si.get_data(code, start_date=date - timedelta(days=5), end_date=date)
-
     stock_name = si.get_quote_data(code)['longName']
     current_price = daily_data['close'].values[len(daily_data) - 1]
+
     if day_of_week in [5, 6]:
         daily_change_amt = 0.00
         daily_change_percent = 0.00
@@ -96,9 +95,9 @@ def get_stock_price_data(code):
 
 
 def get_wsb_hits(code):
-    date = datetime.now(timezone.utc).astimezone(tz=tz.gettz("GMT"))
+    date = datetime.now(timezone.utc)
     today = str(int(date.timestamp()))
-    one_day_ago = str(int((date - timedelta(days=2)).astimezone(tz=tz.gettz("GMT")).timestamp()))
+    one_day_ago = str(int((date - timedelta(days=1)).timestamp()))
     url = 'https://elastic.pushshift.io/rc/comments/_search?source=' \
           '{"query":{"bool":{"must":[{"simple_query_string":{"query":"%(code)s","fields":["body"],' \
           '"default_operator":"and"}}],"filter":[{"range":{"created_utc":{"gte":%(one_day_ago)s,"lte":%(today)s}}},' \
