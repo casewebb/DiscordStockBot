@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine, Table, Column, Integer, Float, String, DateTime, MetaData, ForeignKey, select, \
-    and_, update
+    and_, update, distinct
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
 meta = MetaData()
-engine = create_engine("mysql://root:admin@localhost/discord_stock_bot", echo=True)
+engine = create_engine("mysql://root:admin@localhost/discord_stock_bot")
 Session = sessionmaker(bind=engine)
 session = Session()
 
@@ -63,24 +63,27 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
         if available_bal >= purchase_req_price:
             bal_upd = (
                 update(transaction).where(
-                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD'))
-                    .values(volume=new_bal)
+                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD')).values(
+                    volume=new_bal)
             )
         else:
             print('-----------------------Insuff Funds')
-            return {'Error': 'Insufficient Funds'}
+            return {'is_successful': False, 'message': 'Insufficient Funds',
+                    'transaction_cost': str(purchase_req_price),
+                    'available_funds': str(available_bal)}
     else:
         available_units = get_asset_units(discord_id, asset)
         if available_units >= volume:
             new_bal = available_bal + (price_per_unit * volume)
             bal_upd = (
                 update(transaction).where(
-                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD'))
-                    .values(volume=new_bal)
+                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD')).values(
+                    volume=new_bal)
             )
         else:
             print('-----------------------Insuff Shares')
-            return {'Error': 'Insufficient Shares'}
+            return {'is_successful': False, 'message': 'Insufficient Shares',
+                    'available_funds': str(available_units)}
 
     try:
         session.execute(t_ins)
@@ -88,11 +91,12 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
         session.commit()
         session.flush()
         print('-----------------------SUCCESS' + str(new_bal))
-        return {'Success': str(new_bal)}
+        return {'is_successful': True, 'message': 'Successful',
+                'available_funds': str(new_bal)}
     except:
         session.rollback()
         print('-----------------------ROLLBACK')
-        return {'Error': 'Database Error'}
+        return {'is_successful': False, 'message': 'Database Error'}
 
 
 def get_available_usd_balance(discord_id):
@@ -114,12 +118,28 @@ def get_asset_units(discord_id, asset):
             vol_total -= t.volume
         else:
             vol_total += t.volume
+
     return vol_total
 
 
-#make_transaction('CASE', 'GME', 10, 2000, 1)
-make_transaction('CASE', 'BTC', 10, 5000, 1)
+def get_all_assets(discord_id):
+    assets = session.execute(select([distinct(transaction.asset_code)]).where(
+        (transaction.c.discord_id == discord_id)
+    )).fetchall()
 
+    for asset in assets:
+        transactions = session.execute(select([transaction]).where(
+            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
+        )).fetchall()
+
+        total_vol = 0
+        for t in transactions:
+            if t.is_sale == 1:
+                total_vol -= t.volume
+            else:
+                total_vol += t.volume
+
+
+# make_transaction('CASE', 'GME', 10, 2000, 1)
+# make_transaction('CASE', 'BTC', 10, 5000, 1)
 # make_transaction('34284', 'bb', 50, 15.15, 0)
-
-

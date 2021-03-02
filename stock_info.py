@@ -6,6 +6,8 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from yahoo_fin import stock_info as si
 
+import db_actions
+
 help_command = commands.DefaultHelpCommand(no_category='Commands')
 bot = commands.Bot(command_prefix='!', help_command=help_command)
 load_dotenv()
@@ -117,4 +119,34 @@ def get_wsb_hits(code):
         return ''
 
 
-bot.run(REAL_TOKEN)
+'''
+--- Methods related to the user portfolio and transactions
+'''
+
+
+def transact_asset(discord_id, asset, volume, price, is_sale):
+    result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale)
+    transact_type = 'Bought' if is_sale == 0 else 'Sold'
+    if result.get('is_successful'):
+        print('{transact_type} {volume} {asset}. USD Balance = ${new_bal}'.format(transact_type=transact_type,
+                                                                                  volume=volume, asset=asset,
+                                                                                  new_bal=result.get(
+                                                                                      'available_funds')))
+    else:
+        if result.get('message') == 'Insufficient Funds':
+            print('You\'re too poor. Available Balance: ${available_bal} Transaction Cost: ${cost}'.format(
+                available_bal=result.get('available_funds'), cost=result.get('transaction_cost')))
+        elif result.get('message') == 'Insufficient Shares':
+            print('You don\'t own enough {asset}. Available {asset}: {available_bal} Amount Requested: {cost}'.format(
+                asset=asset, available_bal=result.get('available_funds'), cost=volume))
+
+
+def check_balance(discord_id):
+    db_actions.get_available_usd_balance(discord_id)
+
+
+
+
+
+transact_asset('CASE', 'GME', 100, 50000, 1)
+# bot.run(REAL_TOKEN)
