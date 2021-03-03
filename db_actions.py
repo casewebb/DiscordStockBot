@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Table, Column, Integer, Float, String, DateTime, MetaData, ForeignKey, select, \
-    and_, update, distinct
+    and_, update, distinct, delete, types
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
@@ -19,7 +19,7 @@ transaction = Table(
     Column('id', Integer, primary_key=True),
     Column('discord_id', String(17), ForeignKey('user.discord_id')),
     Column('asset_code', String(10)),
-    Column('volume', Float),
+    Column('volume', types.Float(precision=30)),
     Column('price_per_unit', Float),
     Column('is_sale', Integer),
     Column('transaction_date', DateTime, server_default=func.now()),
@@ -35,11 +35,13 @@ def initialize_new_user(discord_id):
     session.execute(ins)
 
     init_insert = transaction.insert().values(discord_id=discord_id,
-                                              asset_code='USD',
+                                              asset_code='USDOLLAR',
                                               volume=50000,
                                               price_per_unit=1,
                                               is_sale=0)
     session.execute(init_insert)
+    session.commit()
+    session.flush()
 
 
 def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
@@ -52,35 +54,36 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
                                         volume=volume,
                                         price_per_unit=price_per_unit,
                                         is_sale=is_sale)
-
     if users == 0:
         initialize_new_user(discord_id)
 
     available_bal = get_available_usd_balance(discord_id)
     if is_sale == 0:
-        purchase_req_price = price_per_unit * volume
+        purchase_req_price = float(price_per_unit) * float(volume)
         new_bal = available_bal - purchase_req_price
         if available_bal >= purchase_req_price:
             bal_upd = (
                 update(transaction).where(
-                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD')).values(
+                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
                     volume=new_bal)
             )
         else:
-            return {'is_successful': False, 'message': 'Insufficient Funds',
+            return {'is_successful': False,
+                    'message': 'Insufficient Funds',
                     'transaction_cost': str(purchase_req_price),
                     'available_funds': str(available_bal)}
     else:
         available_units = get_asset_units(discord_id, asset)
-        if available_units >= volume:
-            new_bal = available_bal + (price_per_unit * volume)
+        if float(available_units) >= float(volume):
+            new_bal = available_bal + (float(price_per_unit) * float(volume))
             bal_upd = (
                 update(transaction).where(
-                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD')).values(
+                    and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
                     volume=new_bal)
             )
         else:
-            return {'is_successful': False, 'message': 'Insufficient Shares',
+            return {'is_successful': False,
+                    'message': 'Insufficient Shares',
                     'available_funds': str(available_units)}
 
     try:
@@ -98,7 +101,7 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
 
 def get_available_usd_balance(discord_id):
     balance = session.execute(select([transaction]).where(
-        and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USD')
+        and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')
     )).fetchone()
 
     return balance.volume
@@ -108,6 +111,12 @@ def get_asset_units(discord_id, asset):
     transactions = session.execute(select([transaction]).where(
         and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
     )).fetchall()
+
+    if len(transactions) == 0:
+        initialize_new_user(discord_id)
+        transactions = session.execute(select([transaction]).where(
+            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
+        )).fetchall()
 
     vol_total = 0
     for t in transactions:
@@ -126,7 +135,35 @@ def get_all_assets(discord_id):
 
     asset_vol_dict = {}
     for asset in assets:
-        asset_vol_dict[asset.asset_code] = get_asset_units(discord_id, asset.asset_code)
+        total = get_asset_units(discord_id, asset.asset_code)
+        if total > 0:
+            asset_vol_dict[asset.asset_code] = total
 
     return asset_vol_dict
 
+
+def reset(discord_id):
+    bal_upd = (
+        update(transaction).where(
+            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
+            volume=50000)
+    )
+
+    delete_all_transactions = (
+        delete(transaction).where(and_(transaction.c.discord_id == discord_id, transaction.c.asset_code != 'USDOLLAR'))
+    )
+
+    try:
+        session.execute(bal_upd)
+        session.execute(delete_all_transactions)
+        session.commit()
+        session.flush()
+        return {'is_successful': True, 'message': 'Successfully reset balance.',
+                'available_funds': '50000'}
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return {'is_successful': False, 'message': 'Error resetting account'}
+
+
+create_database()

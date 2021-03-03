@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone, timedelta
 
@@ -17,6 +18,11 @@ REAL_TOKEN = os.getenv('REAL_TOKEN')
 
 message_str = '{code} ({full_name}) : ${current_price} ' \
               'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}'
+
+help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
+               ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
+               ' BAT, LRC, KNC, BNT, LINK, CVC, STORJ, ANT, SNGLS, MANA, MLN, DNT, NMR, DAI, ATOM, XTZ,' \
+               ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
 
 
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)')
@@ -45,11 +51,41 @@ async def crypto_price_cmd(ctx, code):
                                           daily_change_percent=crypto_data['daily_change_percent'],
                                           wsb_info=''))
     except KeyError:
-        help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
-                       ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
-                       ' BAT, LRC, KNC, BNT, LINK, CVC, STORJ, ANT, SNGLS, MANA, MLN, DNT, NMR, DAI, ATOM, XTZ,' \
-                       ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
         await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
+
+
+@bot.command(name='trade',
+             help='Trade an asset. !trade [buy/sell] [stock/crypto] [ticker] [amount]')
+async def trade_cmd(ctx, buy_sell, stock_crypto, code, amount):
+    discord_id = ctx.message.author.id
+    discord_name = ctx.message.author.name
+    if stock_crypto.lower() == 'stock':
+        try:
+            purchase_price = get_stock_price_data(code)['current_price']
+        except:
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    else:
+        try:
+            purchase_price = get_crypto_price_data(code)['current_price']
+        except:
+            await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
+            return
+
+    is_sale = 0 if buy_sell.lower() == 'buy' else 1
+    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, is_sale))
+
+
+@bot.command(name='portfolio', help='Shows all of your assets by volume')
+async def portfolio_cmd(ctx):
+    discord_id = ctx.message.author.id
+    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' + json.dumps(check_balance(discord_id), indent=1))
+
+
+@bot.command(name='reset', help='Resets your account back to $50,000 USD.')
+async def reset(ctx):
+    reset_balance(ctx.message.author.id)
+    await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
 
 
 def get_crypto_price_data(code):
@@ -120,36 +156,54 @@ def get_wsb_hits(code):
 
 
 '''
---- Methods related to the user portfolio and transactions
+--- Methods related to the fake user portfolio and transactions
 '''
 
 
-def transact_asset(discord_id, asset, volume, price, is_sale):
+def transact_asset(discord_id, discord_name, asset, amount, price, is_sale):
+    if amount == 'max':
+        if is_sale == 1:
+            volume = db_actions.get_asset_units(discord_id, asset)
+        else:
+            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR') / float(price)
+    elif '$' in amount:
+        volume = float(amount.replace('$', '')) / float(price)
+    else:
+        volume = amount
+
+    total = float(volume) * float(price)
+
     result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale)
     transact_type = 'Bought' if is_sale == 0 else 'Sold'
     if result.get('is_successful'):
-        print('{transact_type} {volume} {asset}. USD Balance = ${new_bal}'.format(transact_type=transact_type,
-                                                                                  volume=volume, asset=asset,
-                                                                                  new_bal=result.get(
-                                                                                      'available_funds')))
+        return '{discord_name} {transact_type} {volume} {asset} for ${total}. USD Balance = ${new_bal}'.format(
+            discord_name=discord_name,
+            transact_type=transact_type,
+            volume=volume, asset=asset,
+            total=total,
+            new_bal=str(round(float(result.get('available_funds')))))
     else:
         if result.get('message') == 'Insufficient Funds':
-            print('You\'re too poor. Available Balance: ${available_bal} Transaction Cost: ${cost}'.format(
-                available_bal=result.get('available_funds'), cost=result.get('transaction_cost')))
+            return 'Sorry {discord_name}, you\'re too poor. Available Balance: ${available_bal} ' \
+                   'Transaction Cost: ${cost}'.format(
+                discord_name=discord_name,
+                available_bal=result.get('available_funds'),
+                cost=result.get('transaction_cost'))
         elif result.get('message') == 'Insufficient Shares':
-            print('You don\'t own enough {asset}. Available {asset}: {available_bal} Amount Requested: {cost}'.format(
-                asset=asset, available_bal=result.get('available_funds'), cost=volume))
+            return 'Sorry {discord_name}, you don\'t own enough {asset}. Available {asset}: {available_bal} ' \
+                   'Amount Requested: {cost}'.format(
+                discord_name=discord_name,
+                asset=asset,
+                available_bal=result.get('available_funds'),
+                cost=amount)
 
 
 def check_balance(discord_id):
     return db_actions.get_all_assets(discord_id)
 
 
-transact_asset('CASE', 'BTC', .02, 40000, 0)
-transact_asset('CASE', 'XRP', 5000, .45, 0)
-transact_asset('CASE', 'BB', 50, 13.33, 0)
-transact_asset('CASE', 'BTC', .04512, 40000, 0)
+def reset_balance(discord_id):
+    return db_actions.reset(discord_id)
 
-print(check_balance('CASE'))
 
-# bot.run(REAL_TOKEN)
+bot.run(REAL_TOKEN)
