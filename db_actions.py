@@ -67,7 +67,6 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
                     volume=new_bal)
             )
         else:
-            print('-----------------------Insuff Funds')
             return {'is_successful': False, 'message': 'Insufficient Funds',
                     'transaction_cost': str(purchase_req_price),
                     'available_funds': str(available_bal)}
@@ -81,7 +80,6 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
                     volume=new_bal)
             )
         else:
-            print('-----------------------Insuff Shares')
             return {'is_successful': False, 'message': 'Insufficient Shares',
                     'available_funds': str(available_units)}
 
@@ -90,12 +88,11 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
         session.execute(bal_upd)
         session.commit()
         session.flush()
-        print('-----------------------SUCCESS' + str(new_bal))
         return {'is_successful': True, 'message': 'Successful',
                 'available_funds': str(new_bal)}
-    except:
+    except Exception as e:
+        print(e)
         session.rollback()
-        print('-----------------------ROLLBACK')
         return {'is_successful': False, 'message': 'Database Error'}
 
 
@@ -123,23 +120,13 @@ def get_asset_units(discord_id, asset):
 
 
 def get_all_assets(discord_id):
-    assets = session.execute(select([distinct(transaction.asset_code)]).where(
+    assets = session.execute(select([distinct(transaction.c.asset_code)]).where(
         (transaction.c.discord_id == discord_id)
     )).fetchall()
 
+    asset_vol_dict = {}
     for asset in assets:
-        transactions = session.execute(select([transaction]).where(
-            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
-        )).fetchall()
+        asset_vol_dict[asset.asset_code] = get_asset_units(discord_id, asset.asset_code)
 
-        total_vol = 0
-        for t in transactions:
-            if t.is_sale == 1:
-                total_vol -= t.volume
-            else:
-                total_vol += t.volume
+    return asset_vol_dict
 
-
-# make_transaction('CASE', 'GME', 10, 2000, 1)
-# make_transaction('CASE', 'BTC', 10, 5000, 1)
-# make_transaction('34284', 'bb', 50, 15.15, 0)

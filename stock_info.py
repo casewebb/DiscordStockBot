@@ -142,11 +142,14 @@ def transact_asset(discord_id, asset, volume, price, is_sale):
 
 
 def check_balance(discord_id):
-    db_actions.get_available_usd_balance(discord_id)
+    return db_actions.get_all_assets(discord_id)
 
 
+transact_asset('CASE', 'BTC', .02, 40000, 0)
+transact_asset('CASE', 'XRP', 5000, .45, 0)
+transact_asset('CASE', 'BB', 50, 13.33, 0)
+transact_asset('CASE', 'BTC', .04512, 40000, 0)
 
+print(check_balance('CASE'))
 
-
-transact_asset('CASE', 'GME', 100, 50000, 1)
 # bot.run(REAL_TOKEN)
