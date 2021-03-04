@@ -22,6 +22,7 @@ transaction = Table(
     Column('volume', types.Float(precision=30)),
     Column('price_per_unit', Float),
     Column('is_sale', Integer),
+    Column('is_crypto', Integer),
     Column('transaction_date', DateTime, server_default=func.now()),
 )
 
@@ -38,13 +39,14 @@ def initialize_new_user(discord_id):
                                               asset_code='USDOLLAR',
                                               volume=50000,
                                               price_per_unit=1,
-                                              is_sale=0)
+                                              is_sale=0,
+                                              is_crypto=0)
     session.execute(init_insert)
     session.commit()
     session.flush()
 
 
-def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
+def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_crypto):
     users = session.execute(select([user]).where(
         user.c.discord_id == discord_id
     )).rowcount
@@ -53,7 +55,8 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale):
                                         asset_code=asset,
                                         volume=volume,
                                         price_per_unit=price_per_unit,
-                                        is_sale=is_sale)
+                                        is_sale=is_sale,
+                                        is_crypto=is_crypto)
     if users == 0:
         initialize_new_user(discord_id)
 
@@ -124,12 +127,11 @@ def get_asset_units(discord_id, asset):
             vol_total -= t.volume
         else:
             vol_total += t.volume
-
     return vol_total
 
 
 def get_all_assets(discord_id):
-    assets = session.execute(select([distinct(transaction.c.asset_code)]).where(
+    assets = session.execute(select([distinct(transaction.c.asset_code), transaction.c.is_crypto]).where(
         (transaction.c.discord_id == discord_id)
     )).fetchall()
 
@@ -138,9 +140,11 @@ def get_all_assets(discord_id):
     for index, asset in enumerate(assets):
         total = get_asset_units(discord_id, asset.asset_code)
         if total > 0:
-            asset_vol_dict[rolling_index] = {'Name': asset.asset_code, 'Shares': total, 'Current Value': 0}
+            asset_vol_dict[rolling_index] = {'name': asset.asset_code,
+                                             'shares': total,
+                                             'current_value': 0,
+                                             'is_crypto': asset.is_crypto}
             rolling_index += 1
-
     return asset_vol_dict
 
 
@@ -166,6 +170,14 @@ def reset(discord_id):
         print(e)
         session.rollback()
         return {'is_successful': False, 'message': 'Error resetting account'}
+
+
+def get_all_users():
+    user_ids = []
+    users = session.execute(select([user])).fetchall()
+    for u in users:
+        user_ids.append(u.discord_id)
+    return user_ids
 
 
 create_database()
