@@ -76,39 +76,49 @@ async def crypto_price_cmd(ctx, code):
 
 
 @bot.command(name='buy',
-             help='Buy an asset. !buy [ticker] [amount]')
-async def trade_cmd(ctx, code, amount):
+             help='Buy an asset. !buy [stock/crypto] [ticker] [amount]')
+async def trade_cmd(ctx, code, stock_crypto, amount):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
-    try:
-        purchase_price = get_stock_price_data(code)['current_price']
-    except (AssertionError, KeyError):
-        purchase_price = get_crypto_price_data(code)['current_price']
-    except:
-        await ctx.send('Unable to find price information for ' + code.upper())
-        return
+    if stock_crypto.lower() == 'stock':
+        try:
+            purchase_price = get_stock_price_data(code)['current_price']
+        except (AssertionError, KeyError):
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    else:
+        try:
+            purchase_price = get_crypto_price_data(code)['current_price']
+        except KeyError:
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 0))
 
 
 @bot.command(name='sell',
-             help='Sell an asset. !sell [ticker] [amount]')
-async def trade_cmd(ctx, code, amount):
+             help='Sell an asset. !sell [stock/crypto] [ticker] [amount]')
+async def trade_cmd(ctx, code, stock_crypto, amount):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
-    try:
-        purchase_price = get_stock_price_data(code)['current_price']
-    except (AssertionError, KeyError):
-        purchase_price = get_crypto_price_data(code)['current_price']
-    except:
-        await ctx.send('Unable to find price information for ' + code.upper())
-        return
+    if stock_crypto.lower() == 'stock':
+        try:
+            purchase_price = get_stock_price_data(code)['current_price']
+        except (AssertionError, KeyError):
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    else:
+        try:
+            purchase_price = get_crypto_price_data(code)['current_price']
+        except KeyError:
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1))
 
 
 @bot.command(name='portfolio', help='Shows all of your assets by volume')
 async def portfolio_cmd(ctx):
     discord_id = ctx.message.author.id
-    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' + format_portfolio(check_balance(discord_id)))
+    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' + format_portfolio(check_balance(discord_id)[0]))
 
 
 @bot.command(name='reset', help='Resets your account back to $50,000 USD.')
@@ -205,10 +215,10 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale):
     result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale)
     transact_type = 'Bought' if is_sale == 0 else 'Sold'
     if result.get('is_successful'):
-        return '{discord_name} {transact_type} {volume} {asset} for ${total}. USD Balance = ${new_bal}'.format(
+        return '{discord_name} {transact_type} {volume} {asset} at {cost_per_unit}/{asset} for ${total}. USD Balance = ${new_bal}'.format(
             discord_name=discord_name,
             transact_type=transact_type,
-            volume=volume, asset=asset,
+            volume=volume, asset=asset, cost_per_unit=price,
             total=total,
             new_bal=str(round(float(result.get('available_funds')))))
     else:
@@ -238,6 +248,7 @@ def get_price_independent_of_type(code):
 
 def check_balance(discord_id):
     assets = db_actions.get_all_assets(discord_id)
+    total = sum(float(assets[index]['Current Value']) for index, asset in enumerate(assets))
     for index, asset in enumerate(assets):
         if assets[index]['Name'] == 'USDOLLAR':
             assets[index]['Current Value'] = assets[index]['Shares']
@@ -245,7 +256,7 @@ def check_balance(discord_id):
             assets[index]['Current Value'] = float(get_price_independent_of_type(assets[index]['Name'])) * float(
                 assets[index]['Shares'])
 
-    return assets
+    return assets, total
 
 
 def format_portfolio(assets):
