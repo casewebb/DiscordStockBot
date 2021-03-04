@@ -134,10 +134,12 @@ def get_all_assets(discord_id):
     )).fetchall()
 
     asset_vol_dict = {}
+    rolling_index = 0
     for index, asset in enumerate(assets):
         total = get_asset_units(discord_id, asset.asset_code)
         if total > 0:
-            asset_vol_dict[index] = {'Name': asset.asset_code, 'Shares': total, 'Current Value': 0}
+            asset_vol_dict[rolling_index] = {'Name': asset.asset_code, 'Shares': total, 'Current Value': 0}
+            rolling_index += 1
 
     return asset_vol_dict
 

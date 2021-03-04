@@ -213,7 +213,8 @@ def check_balance(discord_id):
         if assets[index]['Name'] == 'USDOLLAR':
             assets[index]['Current Value'] = assets[index]['Shares']
         else:
-            assets[index]['Current Value'] = float(get_price_independent_of_type(assets[index]['Name'])) * float(assets[index]['Shares'])
+            assets[index]['Current Value'] = float(get_price_independent_of_type(assets[index]['Name'])) * float(
+                assets[index]['Shares'])
 
     return assets
 
