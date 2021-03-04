@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime, timezone, timedelta
 
@@ -54,26 +53,56 @@ async def crypto_price_cmd(ctx, code):
         await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
 
 
-@bot.command(name='trade',
-             help='Trade an asset. !trade [buy/sell] [stock/crypto] [ticker] [amount]')
-async def trade_cmd(ctx, buy_sell, stock_crypto, code, amount):
+# @bot.command(name='trade',
+#              help='Trade an asset. !trade [buy/sell] [stock/crypto] [ticker] [amount]')
+# async def trade_cmd(ctx, buy_sell, stock_crypto, code, amount):
+#     discord_id = ctx.message.author.id
+#     discord_name = ctx.message.author.name
+#     if stock_crypto.lower() == 'stock':
+#         try:
+#             purchase_price = get_stock_price_data(code)['current_price']
+#         except:
+#             await ctx.send('Unable to find price information for ' + code.upper())
+#             return
+#     else:
+#         try:
+#             purchase_price = get_crypto_price_data(code)['current_price']
+#         except:
+#             await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
+#             return
+#
+#     is_sale = 0 if buy_sell.lower() == 'buy' else 1
+#     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, is_sale))
+
+
+@bot.command(name='buy',
+             help='Buy an asset. !buy [ticker] [amount]')
+async def trade_cmd(ctx, code, amount):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
-    if stock_crypto.lower() == 'stock':
-        try:
-            purchase_price = get_stock_price_data(code)['current_price']
-        except:
-            await ctx.send('Unable to find price information for ' + code.upper())
-            return
-    else:
-        try:
-            purchase_price = get_crypto_price_data(code)['current_price']
-        except:
-            await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
-            return
+    try:
+        purchase_price = get_stock_price_data(code)['current_price']
+    except (AssertionError, KeyError):
+        purchase_price = get_crypto_price_data(code)['current_price']
+    except:
+        await ctx.send('Unable to find price information for ' + code.upper())
+        return
+    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 0))
 
-    is_sale = 0 if buy_sell.lower() == 'buy' else 1
-    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, is_sale))
+
+@bot.command(name='sell',
+             help='Sell an asset. !sell [ticker] [amount]')
+async def trade_cmd(ctx, code, amount):
+    discord_id = ctx.message.author.id
+    discord_name = ctx.message.author.name
+    try:
+        purchase_price = get_stock_price_data(code)['current_price']
+    except (AssertionError, KeyError):
+        purchase_price = get_crypto_price_data(code)['current_price']
+    except:
+        await ctx.send('Unable to find price information for ' + code.upper())
+        return
+    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1))
 
 
 @bot.command(name='portfolio', help='Shows all of your assets by volume')
@@ -221,11 +250,12 @@ def check_balance(discord_id):
 
 def format_portfolio(assets):
     total = sum(float(assets[index]['Current Value']) for index, asset in enumerate(assets))
-    p_string = 'Total Portfolio Value: $' + str(total)
+    p_string = 'Total Portfolio: $' + str(total)
     for index, asset in enumerate(assets):
-        p_string += '\n{asset}   V: {volume}   Total Value: ${value}'.format(asset=str(assets[index]['Name']).upper(),
-                                                                        volume=round(assets[index]['Shares'], 2),
-                                                                        value=round(assets[index]['Current Value'], 2))
+        p_string += '\n{asset}   Volume: {volume}   Value: ${value}'.format(asset=str(assets[index]['Name']).upper(),
+                                                                            volume=round(assets[index]['Shares'], 2),
+                                                                            value=round(assets[index]['Current Value'],
+                                                                                        2))
     return p_string
 
 
