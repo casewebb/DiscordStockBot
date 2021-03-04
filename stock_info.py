@@ -198,8 +198,24 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale):
                 cost=amount)
 
 
+def get_price_independent_of_type(code):
+    try:
+        purchase_price = get_crypto_price_data(code)['current_price']
+    except:
+        purchase_price = get_stock_price_data(code)['current_price']
+
+    return purchase_price
+
+
 def check_balance(discord_id):
-    return db_actions.get_all_assets(discord_id)
+    assets = db_actions.get_all_assets(discord_id)
+    for index, asset in enumerate(assets):
+        if assets[index]['Name'] == 'USDOLLAR':
+            assets[index]['Current Value'] = assets[index]['Shares']
+        else:
+            assets[index]['Current Value'] = float(get_price_independent_of_type(assets[index]['Name'])) * float(assets[index]['Shares'])
+
+    return assets
 
 
 def reset_balance(discord_id):
