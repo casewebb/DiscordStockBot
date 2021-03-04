@@ -79,7 +79,7 @@ async def trade_cmd(ctx, buy_sell, stock_crypto, code, amount):
 @bot.command(name='portfolio', help='Shows all of your assets by volume')
 async def portfolio_cmd(ctx):
     discord_id = ctx.message.author.id
-    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' + json.dumps(check_balance(discord_id), indent=1))
+    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' + format_portfolio(check_balance(discord_id)))
 
 
 @bot.command(name='reset', help='Resets your account back to $50,000 USD.')
@@ -217,6 +217,16 @@ def check_balance(discord_id):
                 assets[index]['Shares'])
 
     return assets
+
+
+def format_portfolio(assets):
+    total = sum(float(assets[index]['Current Value']) for index, asset in enumerate(assets))
+    p_string = 'Total Portfolio Value: $' + str(total)
+    for index, asset in enumerate(assets):
+        p_string += '\n{asset}   V: {volume}   Total Value: ${value}'.format(asset=str(assets[index]['Name']).upper(),
+                                                                        volume=round(assets[index]['Shares'], 2),
+                                                                        value=round(assets[index]['Current Value'], 2))
+    return p_string
 
 
 def reset_balance(discord_id):
