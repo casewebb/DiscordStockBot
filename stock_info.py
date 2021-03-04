@@ -289,7 +289,7 @@ def get_leaderboard(server_members):
 
     lb_string = ''
     for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):
-        lb_string += '{place}. {name} : {total}'.format(place=index+1, name=user['name'], total=user['total'])
+        lb_string += '{place}. {name} : {total}\n'.format(place=index+1, name=user['name'], total=user['total'])
 
     return lb_string
 
