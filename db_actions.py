@@ -41,9 +41,13 @@ def initialize_new_user(discord_id):
                                               price_per_unit=1,
                                               is_sale=0,
                                               is_crypto=0)
-    session.execute(init_insert)
-    session.commit()
-    session.flush()
+
+    try:
+        session.execute(init_insert)
+        session.commit()
+        session.flush()
+    except Exception:
+        pass
 
 
 def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_crypto):
@@ -178,6 +182,3 @@ def get_all_users():
     for u in users:
         user_ids.append(u.discord_id)
     return user_ids
-
-
-create_database()

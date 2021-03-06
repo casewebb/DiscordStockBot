@@ -99,7 +99,7 @@ async def sell_cmd(ctx, stock_crypto, code, amount):
 @bot.command(name='portfolio', help='Shows all of your assets by volume')
 async def portfolio_cmd(ctx):
     await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
-                   format_portfolio(check_balance(ctx.message.author.id)[0]))
+                   format_portfolio(check_balance(ctx.message.author.id)))
 
 
 @bot.command(name='leaderboard', help='Who da winner?')
@@ -255,7 +255,8 @@ def get_formatted_leaderboard(server_members):
     users = db_actions.get_all_users()
     user_totals = []
     for user in users:
-        user_totals.append({'name': server_members[int(user)], 'total': check_balance(user)[1]})
+        if int(user) in server_members.keys():
+            user_totals.append({'name': server_members[int(user)], 'total': check_balance(user)[1]})
 
     lb_string = ''
     for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):
