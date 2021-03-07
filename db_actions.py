@@ -5,7 +5,7 @@ from sqlalchemy.sql import func
 
 meta = MetaData()
 engine = create_engine("mysql://root:admin@localhost/discord_stock_bot")
-Session = sessionmaker(bind=engine)
+Session = sessionmaker(bind=engine, autocommit=True)
 session = Session()
 
 user = Table(
@@ -47,7 +47,7 @@ def initialize_new_user(discord_id):
         session.commit()
         session.flush()
     except Exception:
-        pass
+        session.rollback()
 
 
 def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_crypto):
