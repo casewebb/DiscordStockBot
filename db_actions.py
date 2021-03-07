@@ -80,7 +80,7 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
                     'transaction_cost': str(purchase_req_price),
                     'available_funds': str(available_bal)}
     else:
-        available_units = get_asset_units(discord_id, asset)
+        available_units = get_asset_units(discord_id, asset)[0]
         if float(available_units) >= float(volume):
             new_bal = available_bal + (float(price_per_unit) * float(volume))
             bal_upd = (
@@ -126,12 +126,17 @@ def get_asset_units(discord_id, asset):
         )).fetchall()
 
     vol_total = 0
+    paid_total = 0
+    cost_basis = 0
     for t in transactions:
         if t.is_sale == 1:
             vol_total -= t.volume
         else:
             vol_total += t.volume
-    return vol_total
+            paid_total += (t.volume * t.price_per_unit)
+    if vol_total > 0:
+        cost_basis = paid_total / vol_total
+    return vol_total, cost_basis
 
 
 def get_all_assets(discord_id):
@@ -142,11 +147,14 @@ def get_all_assets(discord_id):
     asset_vol_dict = {}
     rolling_index = 0
     for index, asset in enumerate(assets):
-        total = get_asset_units(discord_id, asset.asset_code)
+        info = get_asset_units(discord_id, asset.asset_code)
+        total = info[0]
+        avg_cost = info[1]
         if total > 0:
             asset_vol_dict[rolling_index] = {'name': asset.asset_code,
                                              'shares': total,
                                              'current_value': 0,
+                                             'avg_price': avg_cost,
                                              'is_crypto': asset.is_crypto}
             rolling_index += 1
     return asset_vol_dict

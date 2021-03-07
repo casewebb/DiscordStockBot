@@ -186,9 +186,9 @@ def get_wsb_hits(code):
 def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
     if amount == 'max':
         if is_sale == 1:
-            volume = db_actions.get_asset_units(discord_id, asset)
+            volume = db_actions.get_asset_units(discord_id, asset)[0]
         else:
-            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR') / float(price)
+            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR')[0] / float(price)
     elif '$' in amount:
         volume = float(amount.replace('$', '')) / float(price)
     else:
@@ -245,9 +245,11 @@ def format_portfolio(assets_info):
     p_string = 'Total Portfolio: $' + str(assets_info[1])
     assets = assets_info[0]
     for index, asset in enumerate(assets):
-        p_string += '\n{asset} Volume: {volume} Value: ${value}'.format(asset=str(assets[index]['name']).upper(),
-                                                                        volume=round(assets[index]['shares'], 2),
-                                                                        value=round(assets[index]['current_value'], 2))
+        p_string += '\n{asset} Volume: {volume}  |  Value: ${value}  |  Average Paid Price: ${avg_price}'.format(
+            asset=str(assets[index]['name']).upper(),
+            volume=round(assets[index]['shares'], 2),
+            value=round(assets[index]['current_value'], 2),
+            avg_price=round(assets[index]['avg_price'], 2))
     return p_string
 
 
