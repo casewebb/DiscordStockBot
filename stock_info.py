@@ -102,6 +102,19 @@ async def portfolio_cmd(ctx):
                    format_portfolio(check_balance(ctx.message.author.id)))
 
 
+@bot.command(name='fportfolio', help='See a friends portfolio !fportfolio name')
+async def portfolio_cmd(ctx, name):
+    user_id = ''
+    for m in ctx.message.guild.members:
+        if m.name == name:
+            user_id = m.id
+    if user_id == '':
+        await ctx.send('Can \'t find portfolio for ' + name)
+        return
+    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
+                   format_portfolio(check_balance(user_id)))
+
+
 @bot.command(name='leaderboard', help='Who da winner?')
 async def leaderboard_cmd(ctx):
     mem_dict = {}
