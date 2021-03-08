@@ -116,7 +116,7 @@ async def portfolio_cmd(ctx, name):
     if user_id == '':
         await ctx.send('Can \'t find portfolio for ' + name)
         return
-    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
+    await ctx.send(name + '\'s Portfolio:\n' +
                    format_portfolio(check_balance(user_id)))
 
 
@@ -161,7 +161,11 @@ def get_stock_price_data(code):
     date = datetime.now(timezone.utc)
     day_of_week = date.weekday()
     daily_data = si.get_data(code, start_date=date - timedelta(days=5), end_date=date)
-    stock_name = si.get_quote_data(code)['longName']
+    try:
+        stock_name = si.get_quote_data(code)['longName']
+    except KeyError:
+        stock_name = si.get_quote_data(code)['shortName']
+
     current_price = daily_data['close'].values[len(daily_data) - 1]
 
     if day_of_week in [5, 6]:
