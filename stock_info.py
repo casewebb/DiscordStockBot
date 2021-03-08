@@ -1,13 +1,18 @@
 import os
 from datetime import datetime, timezone, timedelta
 
+import discord
 import requests
 from discord.ext import commands
 from dotenv import load_dotenv
 from yahoo_fin import stock_info as si
 
+import db_actions
+
 help_command = commands.DefaultHelpCommand(no_category='Commands')
-bot = commands.Bot(command_prefix='!', help_command=help_command)
+intents = discord.Intents.default()
+intents.members = True
+bot = commands.Bot(command_prefix='!', help_command=help_command, intents=intents)
 load_dotenv()
 
 TEST_TOKEN = os.getenv('TEST_TOKEN')
@@ -15,6 +20,16 @@ REAL_TOKEN = os.getenv('REAL_TOKEN')
 
 message_str = '{code} ({full_name}) : ${current_price} ' \
               'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}'
+
+help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
+               ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
+               ' BAT, LRC, KNC, BNT, LINK, CVC, STORJ, ANT, SNGLS, MANA, MLN, DNT, NMR, DAI, ATOM, XTZ,' \
+               ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
+
+
+@bot.before_invoke
+async def wake(x):
+    db_actions.wake_up_db()
 
 
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)')
@@ -43,11 +58,80 @@ async def crypto_price_cmd(ctx, code):
                                           daily_change_percent=crypto_data['daily_change_percent'],
                                           wsb_info=''))
     except KeyError:
-        help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
-                       ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
-                       ' BAT, LRC, KNC, BNT, LINK, CVC, STORJ, ANT, SNGLS, MANA, MLN, DNT, NMR, DAI, ATOM, XTZ,' \
-                       ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
         await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
+
+
+@bot.command(name='buy', help='Buy an asset. !buy [stock/crypto] [ticker] [amount]')
+async def buy_cmd(ctx, stock_crypto, code, amount):
+    discord_id = ctx.message.author.id
+    discord_name = ctx.message.author.name
+    is_crypto = 0 if stock_crypto.lower() == 'stock' else 1
+    if not is_crypto:
+        try:
+            purchase_price = get_stock_price_data(code)['current_price']
+        except (AssertionError, KeyError):
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    else:
+        try:
+            purchase_price = get_crypto_price_data(code)['current_price']
+        except KeyError:
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 0, is_crypto))
+
+
+@bot.command(name='sell', help='Sell an asset. !sell [stock/crypto] [ticker] [amount]')
+async def sell_cmd(ctx, stock_crypto, code, amount):
+    discord_id = ctx.message.author.id
+    discord_name = ctx.message.author.name
+    is_crypto = 0 if stock_crypto.lower() == 'stock' else 1
+    if stock_crypto.lower() == 'stock':
+        try:
+            purchase_price = get_stock_price_data(code)['current_price']
+        except (AssertionError, KeyError):
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    else:
+        try:
+            purchase_price = get_crypto_price_data(code)['current_price']
+        except KeyError:
+            await ctx.send('Unable to find price information for ' + code.upper())
+            return
+    await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1, is_crypto))
+
+
+@bot.command(name='portfolio', help='Shows all of your assets by volume')
+async def portfolio_cmd(ctx):
+    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
+                   format_portfolio(check_balance(ctx.message.author.id)))
+
+
+@bot.command(name='fportfolio', help='See a friends portfolio !fportfolio name')
+async def portfolio_cmd(ctx, name):
+    user_id = ''
+    for m in ctx.message.guild.members:
+        if m.name == name:
+            user_id = m.id
+    if user_id == '':
+        await ctx.send('Can \'t find portfolio for ' + name)
+        return
+    await ctx.send(name + '\'s Portfolio:\n' +
+                   format_portfolio(check_balance(user_id)))
+
+
+@bot.command(name='leaderboard', help='Who da winner?')
+async def leaderboard_cmd(ctx):
+    mem_dict = {}
+    for m in ctx.message.guild.members:
+        mem_dict[m.id] = m.name
+    await ctx.send(get_formatted_leaderboard(mem_dict))
+
+
+@bot.command(name='reset', help='Resets your account back to $50,000 USD.')
+async def reset(ctx):
+    db_actions.reset(ctx.message.author.id)
+    await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
 
 
 def get_crypto_price_data(code):
@@ -77,7 +161,11 @@ def get_stock_price_data(code):
     date = datetime.now(timezone.utc)
     day_of_week = date.weekday()
     daily_data = si.get_data(code, start_date=date - timedelta(days=5), end_date=date)
-    stock_name = si.get_quote_data(code)['longName']
+    try:
+        stock_name = si.get_quote_data(code)['longName']
+    except KeyError:
+        stock_name = si.get_quote_data(code)['shortName']
+
     current_price = daily_data['close'].values[len(daily_data) - 1]
 
     if day_of_week in [5, 6]:
@@ -115,6 +203,90 @@ def get_wsb_hits(code):
         return ' {hits} hits on r/wallstreetbets in the last 24 hours'.format(hits=hits)
     else:
         return ''
+
+
+def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
+    if amount == 'max':
+        if is_sale == 1:
+            volume = db_actions.get_asset_units(discord_id, asset)[0]
+        else:
+            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR')[0] / float(price)
+    elif '$' in amount:
+        volume = float(amount.replace('$', '')) / float(price)
+    else:
+        volume = amount
+    total = float(volume) * float(price)
+
+    transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
+    transact_type = 'Bought' if is_sale == 0 else 'Sold'
+    if transaction_result.get('is_successful'):
+        return '{discord_name} {transact_type} {volume} {asset} at {cost_per_unit}/{asset} for ${total}.' \
+               ' USD Balance = ${new_bal}'.format(
+            discord_name=discord_name,
+            transact_type=transact_type,
+            volume=volume, asset=asset.upper(),
+            cost_per_unit=price,
+            total=total,
+            new_bal=str(round(float(transaction_result.get('available_funds')))))
+    else:
+        if transaction_result.get('message') == 'Insufficient Funds':
+            return 'Sorry {discord_name}, you\'re too poor. Available Balance: ${available_bal} ' \
+                   'Transaction Cost: ${cost}'.format(
+                discord_name=discord_name,
+                available_bal=transaction_result.get('available_funds'),
+                cost=transaction_result.get('transaction_cost'))
+        elif transaction_result.get('message') == 'Insufficient Shares':
+            return 'Sorry {discord_name}, you don\'t own enough {asset}. Available {asset}: {available_bal} ' \
+                   'Amount Requested: {cost}'.format(
+                discord_name=discord_name,
+                asset=asset.upper(),
+                available_bal=transaction_result.get('available_funds'),
+                cost=amount)
+
+
+def get_price_of_asset(code, is_crypto):
+    return get_crypto_price_data(code)['current_price'] if is_crypto == 1 \
+        else get_stock_price_data(code)['current_price']
+
+
+def check_balance(discord_id):
+    assets = db_actions.get_all_assets(discord_id)
+    for index, asset in enumerate(assets):
+        if assets[index]['name'] == 'USDOLLAR':
+            assets[index]['current_value'] = assets[index]['shares']
+        else:
+            assets[index]['current_value'] = float(get_price_of_asset(assets[index]['name'],
+                                                                      assets[index]['is_crypto'])) * float(
+                assets[index]['shares'])
+    total = sum(float(assets[index]['current_value']) for index, asset in enumerate(assets))
+
+    return assets, total
+
+
+def format_portfolio(assets_info):
+    p_string = 'Total Portfolio: $' + str(assets_info[1])
+    assets = assets_info[0]
+    for index, asset in enumerate(assets):
+        p_string += '\n{asset} Volume: {volume}  |  Value: ${value}  |  Average Paid Price: ${avg_price}'.format(
+            asset=str(assets[index]['name']).upper(),
+            volume=round(assets[index]['shares'], 2),
+            value=round(assets[index]['current_value'], 2),
+            avg_price=round(assets[index]['avg_price'], 2))
+    return p_string
+
+
+def get_formatted_leaderboard(server_members):
+    users = db_actions.get_all_users()
+    user_totals = []
+    for user in users:
+        if int(user) in server_members.keys():
+            user_totals.append({'name': server_members[int(user)], 'total': check_balance(user)[1]})
+
+    lb_string = ''
+    for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):
+        lb_string += '{place}. {name} : {total}\n'.format(place=index + 1, name=user['name'], total=user['total'])
+
+    return lb_string
 
 
 bot.run(REAL_TOKEN)
