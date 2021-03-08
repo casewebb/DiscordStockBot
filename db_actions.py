@@ -50,7 +50,6 @@ def initialize_new_user(discord_id):
 
     try:
         session.execute(init_insert)
-        session.commit()
         session.flush()
     except Exception:
         session.rollback()
@@ -102,7 +101,6 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
     try:
         session.execute(t_ins)
         session.execute(bal_upd)
-        session.commit()
         session.flush()
         return {'is_successful': True, 'message': 'Successful',
                 'available_funds': str(new_bal)}
@@ -180,7 +178,6 @@ def reset(discord_id):
     try:
         session.execute(bal_upd)
         session.execute(delete_all_transactions)
-        session.commit()
         session.flush()
         return {'is_successful': True, 'message': 'Successfully reset balance.',
                 'available_funds': '50000'}
