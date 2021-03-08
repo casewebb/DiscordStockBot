@@ -31,6 +31,12 @@ def create_database():
     meta.create_all(engine)
 
 
+def wake_up_db():
+    global session
+    session.close()
+    session = Session()
+
+
 def initialize_new_user(discord_id):
     ins = user.insert().values(discord_id=discord_id)
     session.execute(ins)

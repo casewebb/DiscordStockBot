@@ -27,6 +27,11 @@ help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO
                ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
 
 
+@bot.before_invoke
+async def wake(x):
+    db_actions.wake_up_db()
+
+
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)')
 async def stock_price_cmd(ctx, code):
     wsb_info = get_wsb_hits(code)
