@@ -145,7 +145,10 @@ def get_crypto_price_data(code):
     data = response.json()
     crypto_name = data['data']['name']
     previous_close_24_hr = data["data"]["entries"][0][1]
-    current_price = data["data"]["entries"][95][1]
+    try:
+        current_price = data["data"]["entries"][95][1]
+    except IndexError:
+        current_price = data["data"]["entries"][94][1]
     daily_change_amt = round(current_price - previous_close_24_hr, 2)
     daily_change_percent = round((daily_change_amt / previous_close_24_hr) * 100, 2)
 
