@@ -118,6 +118,11 @@ async def portfolio_cmd(ctx, *args):
                        format_portfolio(check_balance(ctx.message.author.id)))
 
 
+@bot.command(name='history', help='Shows 10 most recent transactions')
+async def history_cmd(ctx):
+    await ctx.send(get_formatted_transaction_history(ctx.message.author.id))
+
+
 @bot.command(name='lb', help='Who da winner?')
 async def leaderboard_cmd(ctx):
     mem_dict = {}
@@ -288,6 +293,23 @@ def get_formatted_leaderboard(server_members):
         lb_string += '{place}. {name} : {total}\n'.format(place=index + 1, name=user['name'], total=user['total'])
 
     return lb_string
+
+
+def get_formatted_transaction_history(discord_id):
+    transactions = db_actions.get_transaction_history(discord_id)
+
+    transactions_string = 'Recent Transactions:'
+    for t in transactions:
+        action = 'Sold' if t.is_sale == 1 else 'Bought'
+        total = t.volume * t.price_per_unit
+        transactions_string += '\n[{date}] {action} {volume} {asset} at {cost_per_unit}/{asset} for ${total}.'.format(
+            date=t.transaction_date,
+            action=action,
+            volume=t.volume,
+            asset=t.asset_code.upper(),
+            cost_per_unit=t.price_per_unit,
+            total=total)
+    return transactions_string
 
 
 bot.run(REAL_TOKEN)

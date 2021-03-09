@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Table, Column, Integer, Float, String, DateTime, MetaData, ForeignKey, select, \
-    and_, update, distinct, delete, types
+    and_, update, distinct, delete, types, desc
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
@@ -164,6 +164,19 @@ def get_all_assets(discord_id):
                                              'is_crypto': asset.is_crypto}
             rolling_index += 1
     return asset_vol_dict
+
+
+def get_transaction_history(discord_id):
+    transactions = session.execute(select([transaction]).where(
+        transaction.c.discord_id == discord_id
+    ).order_by(desc(transaction.c.transaction_date)).limit(10)).fetchall()
+
+    if len(transactions) == 0:
+        initialize_new_user(discord_id)
+        transactions = session.execute(select([transaction]).where(
+            transaction.c.discord_id == discord_id
+        ).order_by(desc(transaction.c.transaction_date)).limit(10)).fetchall()
+    return transactions
 
 
 def reset(discord_id):
