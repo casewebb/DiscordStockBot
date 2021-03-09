@@ -65,7 +65,7 @@ async def crypto_price_cmd(ctx, code):
 async def buy_cmd(ctx, stock_crypto, code, amount):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
-    is_crypto = 0 if stock_crypto.lower() == 'stock' else 1
+    is_crypto = 0 if (stock_crypto.lower() == 'stock' or stock_crypto.lower() == 's') else 1
     if not is_crypto:
         try:
             purchase_price = get_stock_price_data(code)['current_price']
@@ -85,8 +85,8 @@ async def buy_cmd(ctx, stock_crypto, code, amount):
 async def sell_cmd(ctx, stock_crypto, code, amount):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
-    is_crypto = 0 if stock_crypto.lower() == 'stock' else 1
-    if stock_crypto.lower() == 'stock':
+    is_crypto = 0 if (stock_crypto.lower() == 'stock' or stock_crypto.lower() == 's') else 1
+    if not is_crypto:
         try:
             purchase_price = get_stock_price_data(code)['current_price']
         except (AssertionError, KeyError):
@@ -101,26 +101,24 @@ async def sell_cmd(ctx, stock_crypto, code, amount):
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1, is_crypto))
 
 
-@bot.command(name='portfolio', help='Shows all of your assets by volume')
-async def portfolio_cmd(ctx):
-    await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
-                   format_portfolio(check_balance(ctx.message.author.id)))
+@bot.command(name='pf', help='Shows all of your assets by volume')
+async def portfolio_cmd(ctx, *args):
+    if len(args) != 0:
+        user_id = ''
+        for m in ctx.message.guild.members:
+            if m.name == args[0]:
+                user_id = m.id
+        if user_id == '':
+            await ctx.send('Can \'t find portfolio for ' + args[0])
+            return
+        await ctx.send(args[0] + '\'s Portfolio:\n' +
+                       format_portfolio(check_balance(user_id)))
+    else:
+        await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
+                       format_portfolio(check_balance(ctx.message.author.id)))
 
 
-@bot.command(name='fportfolio', help='See a friends portfolio !fportfolio name')
-async def portfolio_cmd(ctx, name):
-    user_id = ''
-    for m in ctx.message.guild.members:
-        if m.name == name:
-            user_id = m.id
-    if user_id == '':
-        await ctx.send('Can \'t find portfolio for ' + name)
-        return
-    await ctx.send(name + '\'s Portfolio:\n' +
-                   format_portfolio(check_balance(user_id)))
-
-
-@bot.command(name='leaderboard', help='Who da winner?')
+@bot.command(name='lb', help='Who da winner?')
 async def leaderboard_cmd(ctx):
     mem_dict = {}
     for m in ctx.message.guild.members:

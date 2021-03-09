@@ -132,14 +132,16 @@ def get_asset_units(discord_id, asset):
     vol_total = 0
     paid_total = 0
     cost_basis = 0
+    purchase_vol = 0
     for t in transactions:
         if t.is_sale == 1:
             vol_total -= t.volume
         else:
             vol_total += t.volume
+            purchase_vol += t.volume
             paid_total += (t.volume * t.price_per_unit)
     if vol_total > 0:
-        cost_basis = paid_total / vol_total
+        cost_basis = paid_total / purchase_vol
     return vol_total, cost_basis
 
 
