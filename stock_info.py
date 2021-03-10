@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 from datetime import datetime, timezone, timedelta
 
 import discord
@@ -194,8 +194,9 @@ async def portfolio_cmd(ctx, *args):
     else:
         pages = format_portfolio(check_balance(ctx.message.author.id))
         for index, page in enumerate(pages):
-            await ctx.send("```" + ctx.message.author.name + '\'s Portfolio (Page {page}):\n'.format(page=str(index + 1)) +
-                           page + "```")
+            await ctx.send(
+                "```" + ctx.message.author.name + '\'s Portfolio (Page {page}):\n'.format(page=str(index + 1)) +
+                page + "```")
 
 
 @bot.command(name='history', help='Shows 10 most recent transactions')
@@ -403,17 +404,22 @@ def format_portfolio(assets_info):
     assets = assets_info[0]
     for index, asset in enumerate(assets):
         p_string += '\n{asset} Volume: {volume}Value: ${value}Average Paid Price: ${avg_price}' \
-                    'Current Price: ${current_price}'.format(
-            asset=str(assets[index]['name']).upper().ljust(8),
-            volume=str(round(assets[index]['shares'], 4)).ljust(20),
-            value=str(round(assets[index]['current_value'], 2)).ljust(20),
-            avg_price=str(round(assets[index]['avg_price'], 2)).ljust(20),
-            current_price=str(round(assets[index]['current_unit_price'], 2)).ljust(20))
+                    'Current Price: ${current_price} ({pcnt_chg}%)'.format(
+            asset=str(assets[index]['name']).upper().ljust(10),
+            volume=str(round(assets[index]['shares'], 4)).ljust(15),
+            value=str(round(assets[index]['current_value'], 2)).ljust(15),
+            avg_price=str(round(assets[index]['avg_price'], 2)).ljust(15),
+            current_price=str(round(assets[index]['current_unit_price'], 2)).ljust(10),
+            pcnt_chg=str(round(get_pcnt_change(assets[index]['current_unit_price'], assets[index]['avg_price']), 2)))
         if len(p_string) > 1750:
             pages.append(p_string)
             p_string = ''
     pages.append(p_string)
     return pages
+
+
+def get_pcnt_change(val1, val2):
+    return (val1 - val2) / val2 * 100
 
 
 def get_formatted_leaderboard(server_members):
