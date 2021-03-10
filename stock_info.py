@@ -39,6 +39,7 @@ async def help_cmd(ctx):
               "  stock       Shows the price of a given stock. (ex. !stock gme)\n" \
               "  buy         Buy an asset. !buy [stock/crypto] [ticker] [amount]\n" \
               "  sell        Sell an asset. !sell [stock/crypto] [ticker] [amount]\n" \
+              "  liquidate   Sell all assets at market value.\n" \
               "  portfolio   Shows all of your assets by volume.\n" \
               "  history     Shows 10 most recent transactions.\n" \
               "  leaderboard Shows ordered list of participants by portfolio value.\n" \
@@ -84,13 +85,13 @@ async def buy_cmd(ctx, stock_crypto, code, amount):
     if not is_crypto:
         try:
             purchase_price = get_stock_price_data(code)['current_price']
-        except (AssertionError, KeyError):
+        except Exception:
             await ctx.send('Unable to find price information for ' + code.upper())
             return
     else:
         try:
             purchase_price = get_crypto_price_data(code)['current_price']
-        except KeyError:
+        except Exception:
             await ctx.send('Unable to find price information for ' + code.upper())
             return
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 0, is_crypto))
@@ -104,16 +105,33 @@ async def sell_cmd(ctx, stock_crypto, code, amount):
     if not is_crypto:
         try:
             purchase_price = get_stock_price_data(code)['current_price']
-        except (AssertionError, KeyError):
+        except Exception:
             await ctx.send('Unable to find price information for ' + code.upper())
             return
     else:
         try:
             purchase_price = get_crypto_price_data(code)['current_price']
-        except KeyError:
+        except Exception:
             await ctx.send('Unable to find price information for ' + code.upper())
             return
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1, is_crypto))
+
+
+@bot.command(name='liquidate', help='Sell all assets at market value.', aliases=['liq'])
+async def liquidate_cmd(ctx):
+    discord_id = ctx.message.author.id
+    discord_name = ctx.message.author.name
+    assets = db_actions.get_all_assets(ctx.message.author.id)
+    for index, asset in enumerate(assets):
+        if assets[index]['name'].lower() == 'usdollar':
+            continue
+        if assets[index]['is_crypto']:
+            price = get_crypto_price_data(assets[index]['name'])['current_price']
+        else:
+            price = get_stock_price_data(assets[index]['name'])['current_price']
+        await ctx.send(transact_asset(discord_id, discord_name, assets[index]['name'],
+                                      'max', price, 1, assets[index]['is_crypto']))
+    await ctx.send('All assets sold.')
 
 
 @bot.command(name='gayryan', help='Oh you know..')
@@ -295,19 +313,22 @@ def get_crypto_price_data(code):
 def get_stock_price_data(code):
     date = datetime.now(timezone.utc)
     day_of_week = date.weekday()
-    daily_data = si.get_data(code, start_date=date - timedelta(days=5), end_date=date)
+    daily_data = si.get_quote_data(code)
     try:
-        stock_name = si.get_quote_data(code)['longName']
+        stock_name = daily_data['longName']
     except KeyError:
-        stock_name = si.get_quote_data(code)['shortName']
+        stock_name = daily_data['shortName']
 
-    current_price = daily_data['close'].values[len(daily_data) - 1]
+    try:
+        current_price = daily_data['postMarketPrice']
+    except KeyError:
+        current_price = daily_data['regularMarketPrice']
 
     if day_of_week in [5, 6]:
         daily_change_amt = 0.00
         daily_change_percent = 0.00
     else:
-        previous_close = daily_data['close'].values[len(daily_data) - 2]
+        previous_close = daily_data['regularMarketPreviousClose']
         daily_change_amt = round(current_price - previous_close, 2)
         daily_change_percent = round((daily_change_amt / previous_close) * 100, 2)
 
@@ -351,6 +372,11 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
     else:
         volume = amount
     total = float(volume) * float(price)
+    if int(total) == 0:
+        if is_sale == 1:
+            return 'You don\'t have any ' + asset.upper() + '.'
+        else:
+            return 'You don\'t have any money.'
 
     transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
     transact_type = 'Bought' if is_sale == 0 else 'Sold'
@@ -405,13 +431,14 @@ def format_portfolio(assets_info):
     p_string = 'Total Value: $' + str(round(assets_info[1], 2)) + "\n"
     assets = assets_info[0]
     for index, asset in enumerate(assets):
+        decimals = 3 if assets[index]['avg_price'] < 10 else 2
         p_string += '\n{asset} Volume: {volume}Value: ${value}Average Paid Price: ${avg_price}' \
                     'Current Price: ${current_price} ({pcnt_chg}%)'.format(
             asset=str(assets[index]['name']).upper().ljust(10),
             volume=str(round(assets[index]['shares'], 4)).ljust(15),
             value=str(round(assets[index]['current_value'], 2)).ljust(15),
-            avg_price=str(round(assets[index]['avg_price'], 2)).ljust(15),
-            current_price=str(round(assets[index]['current_unit_price'], 2)).ljust(10),
+            avg_price=str(round(assets[index]['avg_price'], decimals)).ljust(15),
+            current_price=str(round(assets[index]['current_unit_price'], decimals)).ljust(10),
             pcnt_chg=str(round(get_pcnt_change(assets[index]['current_unit_price'], assets[index]['avg_price']), 2)))
         if len(p_string) > 1750:
             pages.append(p_string)
@@ -436,13 +463,11 @@ def get_formatted_leaderboard(server_members):
         lb_string += '{place}. {name}: ${total}\n'.format(place=index + 1,
                                                           name=user['name'],
                                                           total=round(user['total'], 2))
-
     return lb_string
 
 
 def get_formatted_transaction_history(discord_id):
     transactions = db_actions.get_transaction_history(discord_id)
-
     transactions_string = 'Recent Transactions:'
     for t in transactions:
         action = 'Sold' if t.is_sale == 1 else 'Bought'
