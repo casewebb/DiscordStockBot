@@ -111,11 +111,15 @@ async def portfolio_cmd(ctx, *args):
         if user_id == '':
             await ctx.send('Can \'t find portfolio for ' + args[0])
             return
-        await ctx.send("'''" + args[0] + '\'s Portfolio:\n' +
-                       format_portfolio(check_balance(user_id)) + "'''")
+        pages = format_portfolio(check_balance(user_id))
+        for index, page in enumerate(pages):
+            await ctx.send("```" + args[0] + '\'s Portfolio (Page {page}):\n'.format(page=str(index + 1)) +
+                           page + "```")
     else:
-        await ctx.send("```" + ctx.message.author.name + '\'s Portfolio:\n' +
-                       format_portfolio(check_balance(ctx.message.author.id)) + "```")
+        pages = format_portfolio(check_balance(ctx.message.author.id))
+        for index, page in enumerate(pages):
+            await ctx.send("```" + ctx.message.author.name + '\'s Portfolio (Page {page}):\n'.format(page=str(index + 1)) +
+                           page + "```")
 
 
 @bot.command(name='history', help='Shows 10 most recent transactions')
@@ -318,17 +322,22 @@ def check_balance(discord_id):
 
 
 def format_portfolio(assets_info):
+    pages = []
     p_string = 'Total Value: $' + str(round(assets_info[1], 2)) + "\n"
     assets = assets_info[0]
     for index, asset in enumerate(assets):
         p_string += '\n{asset} Volume: {volume}Value: ${value}Average Paid Price: ${avg_price}' \
                     'Current Price: ${current_price}'.format(
             asset=str(assets[index]['name']).upper().ljust(8),
-            volume=str(round(assets[index]['shares'], 2)).ljust(20),
+            volume=str(round(assets[index]['shares'], 4)).ljust(20),
             value=str(round(assets[index]['current_value'], 2)).ljust(20),
             avg_price=str(round(assets[index]['avg_price'], 2)).ljust(20),
             current_price=str(round(assets[index]['current_unit_price'], 2)).ljust(20))
-    return p_string
+        if len(p_string) > 1750:
+            pages.append(p_string)
+            p_string = ''
+    pages.append(p_string)
+    return pages
 
 
 def get_formatted_leaderboard(server_members):
