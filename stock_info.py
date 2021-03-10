@@ -144,6 +144,8 @@ async def ryan_cmd(ctx):
 
     await asyncio.sleep(3)
     await ctx.send('What did you just fucking say?')
+
+    await asyncio.sleep(5)
     await webhook.send(content='LOL custom message for that, really?', username=ryan[0],
                        avatar_url=str(ryan[1]))
 
