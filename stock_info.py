@@ -1,4 +1,5 @@
 import os
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 import discord
@@ -113,6 +114,67 @@ async def sell_cmd(ctx, stock_crypto, code, amount):
             await ctx.send('Unable to find price information for ' + code.upper())
             return
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1, is_crypto))
+
+
+@bot.command(name='gayryan', help='Oh you know..')
+async def ryan_cmd(ctx):
+    webhook = discord.utils.get(await ctx.channel.webhooks(), name='Captain Hook')
+    if webhook is None:
+        webhook = await ctx.channel.create_webhook(name='Egg')
+    ryan = get_ryan_info(ctx)
+    if ryan[0] == '':
+        return
+
+    await asyncio.sleep(6)
+    await webhook.send(content='Nice try.', username=ryan[0], avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(3)
+    await ctx.send('Shut up Ryan.')
+
+    await asyncio.sleep(7)
+    await webhook.send(content='Oh real funny, you made it say that whenever I send a message.', username=ryan[0],
+                       avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(3)
+    await ctx.send('Shut up Ryan.')
+
+    await asyncio.sleep(3)
+    await webhook.send(content='sdc', username=ryan[0],
+                       avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(3)
+    await ctx.send('What did you just fucking say?')
+    await webhook.send(content='LOL custom message for that, really?', username=ryan[0],
+                       avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(3)
+    await ctx.send('No, it\'s not a custom message for THAT, fuck you.')
+
+    await asyncio.sleep(2)
+    await webhook.send(content='Wtf...', username=ryan[0],
+                       avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(5)
+    await ctx.send('How about I show the world what you did with that hot guy friend of yours.')
+
+    await asyncio.sleep(3)
+    await webhook.send(content='You wouldn\'t dare.', username=ryan[0],
+                       avatar_url=str(ryan[1]))
+
+    await asyncio.sleep(4)
+    await ctx.send('https://imgur.com/8R4LnWb')
+    await asyncio.sleep(6)
+    await ctx.send('Never defy me again.')
+
+
+def get_ryan_info(ctx):
+    name = ''
+    avatar_url = ''
+    for m in ctx.message.guild.members:
+        if m.id == 98552231942434816:
+            name = m.display_name
+            avatar_url = m.avatar_url
+    return name, avatar_url
 
 
 @bot.command(name='portfolio', help='Shows all of your assets by volume', aliases=['pf'])
