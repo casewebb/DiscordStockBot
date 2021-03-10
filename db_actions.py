@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Table, Column, Integer, Float, String, DateTime, MetaData, ForeignKey, select, \
-    and_, update, distinct, delete, types, desc
+    and_, update, distinct, delete, types, desc, asc
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
@@ -121,7 +121,7 @@ def get_available_usd_balance(discord_id):
 def get_asset_units(discord_id, asset):
     transactions = session.execute(select([transaction]).where(
         and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
-    )).fetchall()
+    ).order_by(asc(transaction.c.transaction_date))).fetchall()
 
     vol_total = 0
     paid_total = 0
@@ -130,6 +130,9 @@ def get_asset_units(discord_id, asset):
     for t in transactions:
         if t.is_sale == 1:
             vol_total -= t.volume
+            if int(vol_total) == 0:
+                paid_total = 0
+                purchase_vol = 0
         else:
             vol_total += t.volume
             purchase_vol += t.volume
