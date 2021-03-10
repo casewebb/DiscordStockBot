@@ -9,10 +9,9 @@ from yahoo_fin import stock_info as si
 
 import db_actions
 
-help_command = commands.DefaultHelpCommand(no_category='Commands')
 intents = discord.Intents.default()
 intents.members = True
-bot = commands.Bot(command_prefix='!', help_command=help_command, intents=intents)
+bot = commands.Bot(command_prefix='!', help_command=None, intents=intents)
 load_dotenv()
 
 TEST_TOKEN = os.getenv('TEST_TOKEN')
@@ -30,6 +29,21 @@ help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO
 @bot.before_invoke
 async def wake(x):
     db_actions.wake_up_db()
+
+
+@bot.command(name='help')
+async def help_cmd(ctx):
+    message = "```Commands:\n" \
+              "  crypto      Shows the price of a given cryptocurrency. (ex. !crypto btc)\n" \
+              "  stock       Shows the price of a given stock. (ex. !stock gme)\n" \
+              "  buy         Buy an asset. !buy [stock/crypto] [ticker] [amount]\n" \
+              "  sell        Sell an asset. !sell [stock/crypto] [ticker] [amount]\n" \
+              "  portfolio   Shows all of your assets by volume.\n" \
+              "  history     Shows 10 most recent transactions.\n" \
+              "  leaderboard Shows ordered list of participants by portfolio value.\n" \
+              "  reset       Resets your account back to $50,000 USD." \
+              "```"
+    await ctx.send(message)
 
 
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)', aliases=['s'])
