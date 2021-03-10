@@ -32,14 +32,14 @@ async def wake(x):
     db_actions.wake_up_db()
 
 
-@bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)')
+@bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)', aliases=['s'])
 async def stock_price_cmd(ctx, code):
     wsb_info = get_wsb_hits(code)
     try:
         price_data = get_stock_price_data(code)
         await ctx.send(message_str.format(code=code.upper(),
                                           full_name=price_data['name'],
-                                          current_price=price_data['current_price'],
+                                          current_price=str(round(float(price_data['current_price']), 2)),
                                           daily_change_amt=price_data['daily_change_amt'],
                                           daily_change_percent=price_data['daily_change_percent'],
                                           wsb_info=wsb_info))
@@ -47,13 +47,13 @@ async def stock_price_cmd(ctx, code):
         await ctx.send('Unable to find price information for ' + code.upper())
 
 
-@bot.command(name='crypto', help='Shows the price of a given cryptocurrency (ex. !crypto btc)')
+@bot.command(name='crypto', help='Shows the price of a given cryptocurrency (ex. !crypto btc)', aliases=['c'])
 async def crypto_price_cmd(ctx, code):
     try:
         crypto_data = get_crypto_price_data(code)
         await ctx.send(message_str.format(code=code.upper(),
                                           full_name=crypto_data['name'],
-                                          current_price=crypto_data['current_price'],
+                                          current_price=str(round(float(crypto_data['current_price']), 2)),
                                           daily_change_amt=crypto_data['daily_change_amt'],
                                           daily_change_percent=crypto_data['daily_change_percent'],
                                           wsb_info=''))
@@ -101,7 +101,7 @@ async def sell_cmd(ctx, stock_crypto, code, amount):
     await ctx.send(transact_asset(discord_id, discord_name, code, amount, purchase_price, 1, is_crypto))
 
 
-@bot.command(name='pf', help='Shows all of your assets by volume')
+@bot.command(name='portfolio', help='Shows all of your assets by volume', aliases=['pf'])
 async def portfolio_cmd(ctx, *args):
     if len(args) != 0:
         user_id = ''
@@ -111,19 +111,19 @@ async def portfolio_cmd(ctx, *args):
         if user_id == '':
             await ctx.send('Can \'t find portfolio for ' + args[0])
             return
-        await ctx.send(args[0] + '\'s Portfolio:\n' +
-                       format_portfolio(check_balance(user_id)))
+        await ctx.send("'''" + args[0] + '\'s Portfolio:\n' +
+                       format_portfolio(check_balance(user_id)) + "'''")
     else:
-        await ctx.send(ctx.message.author.name + '\'s Portfolio:\n' +
-                       format_portfolio(check_balance(ctx.message.author.id)))
+        await ctx.send("```" + ctx.message.author.name + '\'s Portfolio:\n' +
+                       format_portfolio(check_balance(ctx.message.author.id)) + "```")
 
 
 @bot.command(name='history', help='Shows 10 most recent transactions')
 async def history_cmd(ctx):
-    await ctx.send(get_formatted_transaction_history(ctx.message.author.id))
+    await ctx.send("```" + get_formatted_transaction_history(ctx.message.author.id) + "```")
 
 
-@bot.command(name='lb', help='Who da winner?')
+@bot.command(name='leaderboard', help='Who da winner?', aliases=['lb'])
 async def leaderboard_cmd(ctx):
     mem_dict = {}
     for m in ctx.message.guild.members:
@@ -137,29 +137,75 @@ async def reset(ctx):
     await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
 
 
-def get_crypto_price_data(code):
-    crypto_price_url = 'https://production.api.coindesk.com/v2/price/values/' \
-                       '{code}?start_date={start_date}&end_date={end_date}&ohlc=false'
+# Coindesk API
+# def get_crypto_price_data(code):
+#     crypto_price_url = 'https://production.api.coindesk.com/v2/price/values/' \
+#                        '{code}?start_date={start_date}&end_date={end_date}&ohlc=false'
+#
+#     end_date = datetime.now(timezone.utc)
+#     start_date = end_date - timedelta(days=1)
+#     url = crypto_price_url.format(code=code.upper(),
+#                                   start_date=start_date.strftime('%Y-%m-%dT%H:%M'),
+#                                   end_date=end_date.strftime('%Y-%m-%dT%H:%M'))
+#     response = requests.get(url)
+#     data = response.json()
+#     crypto_name = data['data']['name']
+#     previous_close_24_hr = data["data"]["entries"][0][1]
+#     try:
+#         current_price = data["data"]["entries"][95][1]
+#     except IndexError:
+#         current_price = data["data"]["entries"][94][1]
+#     daily_change_amt = round(current_price - previous_close_24_hr, 2)
+#     daily_change_percent = round((daily_change_amt / previous_close_24_hr) * 100, 2)
+#
+#     return {'name': crypto_name,
+#             'current_price': str(round(current_price, 2)),
+#             'daily_change_amt': str(daily_change_amt),
+#             'daily_change_percent': str(daily_change_percent)}
 
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=1)
-    url = crypto_price_url.format(code=code.upper(),
-                                  start_date=start_date.strftime('%Y-%m-%dT%H:%M'),
-                                  end_date=end_date.strftime('%Y-%m-%dT%H:%M'))
-    response = requests.get(url)
-    data = response.json()
-    crypto_name = data['data']['name']
-    previous_close_24_hr = data["data"]["entries"][0][1]
-    try:
-        current_price = data["data"]["entries"][95][1]
-    except IndexError:
-        current_price = data["data"]["entries"][94][1]
-    daily_change_amt = round(current_price - previous_close_24_hr, 2)
+
+# Crypto.com API
+# def get_crypto_price_data(code):
+#     asset_info = None
+#     page = 1
+#     total_pages = 999
+#     while asset_info is None or page > total_pages:
+#         print('Page ' + str(page))
+#         crypto_price_url = 'https://crypto.com/price/coin-data/summary/by_market_cap_page_{page}.json'
+#         response = requests.get(crypto_price_url.format(page=page))
+#         total_pages = response.json()['page_count']
+#         data = response.json()['tokens']
+#         asset_info = next((a for a in data if a['symbol'].lower() == code.lower()), None)
+#         page += 1
+#
+#     crypto_name = asset_info['name']
+#     current_price = asset_info['usd_price']
+#     daily_change_percent = round(asset_info['usd_change_24h'] * 100, 2)
+#     daily_change_amt = current_price * asset_info['usd_change_24h']
+#
+#     return {'name': crypto_name,
+#             'current_price': str(round(current_price, 2)),
+#             'daily_change_amt': str(daily_change_amt),
+#             'daily_change_percent': str(daily_change_percent)}
+
+
+# Binance API
+def get_crypto_price_data(code):
+    crypto_price_url = 'https://www.binance.com/gateway-api/v2/public/asset-service/product/get-products?includeEtf=false'
+
+    response = requests.get(crypto_price_url)
+    data = response.json()['data']
+    asset_info = next((a for a in data if (a['b'].lower() == code.lower() and 'usd' in a['q'].lower())), None)
+
+    crypto_name = asset_info['an']
+    current_price = float(asset_info['c'])
+    previous_close_24_hr = float(asset_info['o'])
+    daily_change_amt = current_price - previous_close_24_hr
     daily_change_percent = round((daily_change_amt / previous_close_24_hr) * 100, 2)
 
     return {'name': crypto_name,
-            'current_price': str(round(current_price, 2)),
-            'daily_change_amt': str(daily_change_amt),
+            'current_price': str(current_price),
+            'daily_change_amt': str(round(daily_change_amt, 2)),
             'daily_change_percent': str(daily_change_percent)}
 
 
@@ -183,7 +229,7 @@ def get_stock_price_data(code):
         daily_change_percent = round((daily_change_amt / previous_close) * 100, 2)
 
     return {'name': stock_name,
-            'current_price': str(round(current_price, 2)),
+            'current_price': str(current_price),
             'daily_change_amt': str(daily_change_amt),
             'daily_change_percent': str(daily_change_percent)}
 
@@ -226,13 +272,14 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
     transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
     transact_type = 'Bought' if is_sale == 0 else 'Sold'
     if transaction_result.get('is_successful'):
-        return '{discord_name} {transact_type} {volume} {asset} at {cost_per_unit}/{asset} for ${total}.' \
+        return '{discord_name} {transact_type} {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
                ' USD Balance = ${new_bal}'.format(
             discord_name=discord_name,
             transact_type=transact_type,
-            volume=volume, asset=asset.upper(),
-            cost_per_unit=price,
-            total=total,
+            volume=round(float(volume), 4),
+            asset=asset.upper(),
+            cost_per_unit=round(float(price), 2),
+            total=round(total, 2),
             new_bal=str(round(float(transaction_result.get('available_funds')))))
     else:
         if transaction_result.get('message') == 'Insufficient Funds':
@@ -260,24 +307,27 @@ def check_balance(discord_id):
     for index, asset in enumerate(assets):
         if assets[index]['name'] == 'USDOLLAR':
             assets[index]['current_value'] = assets[index]['shares']
+            assets[index]['current_unit_price'] = assets[index]['avg_price']
         else:
-            assets[index]['current_value'] = float(get_price_of_asset(assets[index]['name'],
-                                                                      assets[index]['is_crypto'])) * float(
-                assets[index]['shares'])
+            assets[index]['current_unit_price'] = float(get_price_of_asset(assets[index]['name'],
+                                                                           assets[index]['is_crypto']))
+            assets[index]['current_value'] = assets[index]['current_unit_price'] * float(assets[index]['shares'])
     total = sum(float(assets[index]['current_value']) for index, asset in enumerate(assets))
 
     return assets, total
 
 
 def format_portfolio(assets_info):
-    p_string = 'Total Portfolio: $' + str(assets_info[1])
+    p_string = 'Total Value: $' + str(round(assets_info[1], 2)) + "\n"
     assets = assets_info[0]
     for index, asset in enumerate(assets):
-        p_string += '\n{asset} Volume: {volume}  |  Value: ${value}  |  Average Paid Price: ${avg_price}'.format(
-            asset=str(assets[index]['name']).upper(),
-            volume=round(assets[index]['shares'], 2),
-            value=round(assets[index]['current_value'], 2),
-            avg_price=round(assets[index]['avg_price'], 2))
+        p_string += '\n{asset} Volume: {volume}Value: ${value}Average Paid Price: ${avg_price}' \
+                    'Current Price: ${current_price}'.format(
+            asset=str(assets[index]['name']).upper().ljust(8),
+            volume=str(round(assets[index]['shares'], 2)).ljust(20),
+            value=str(round(assets[index]['current_value'], 2)).ljust(20),
+            avg_price=str(round(assets[index]['avg_price'], 2)).ljust(20),
+            current_price=str(round(assets[index]['current_unit_price'], 2)).ljust(20))
     return p_string
 
 
@@ -290,7 +340,9 @@ def get_formatted_leaderboard(server_members):
 
     lb_string = ''
     for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):
-        lb_string += '{place}. {name} : {total}\n'.format(place=index + 1, name=user['name'], total=user['total'])
+        lb_string += '{place}. {name}: ${total}\n'.format(place=index + 1,
+                                                          name=user['name'],
+                                                          total=round(user['total'], 2))
 
     return lb_string
 
@@ -305,10 +357,10 @@ def get_formatted_transaction_history(discord_id):
         transactions_string += '\n[{date}] {action} {volume} {asset} at {cost_per_unit}/{asset} for ${total}.'.format(
             date=t.transaction_date,
             action=action,
-            volume=t.volume,
+            volume=round(t.volume, 4),
             asset=t.asset_code.upper(),
-            cost_per_unit=t.price_per_unit,
-            total=total)
+            cost_per_unit=round(t.price_per_unit, 3),
+            total=round(total, 3))
     return transactions_string
 
 

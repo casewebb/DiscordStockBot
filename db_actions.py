@@ -123,12 +123,6 @@ def get_asset_units(discord_id, asset):
         and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
     )).fetchall()
 
-    if len(transactions) == 0:
-        initialize_new_user(discord_id)
-        transactions = session.execute(select([transaction]).where(
-            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == asset)
-        )).fetchall()
-
     vol_total = 0
     paid_total = 0
     cost_basis = 0
