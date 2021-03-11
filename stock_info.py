@@ -1,4 +1,3 @@
-import asyncio
 import os
 from datetime import datetime, timezone, timedelta
 
@@ -134,69 +133,6 @@ async def liquidate_cmd(ctx):
     await ctx.send('All assets sold.')
 
 
-@bot.command(name='gayryan', help='Oh you know..')
-async def ryan_cmd(ctx):
-    webhook = discord.utils.get(await ctx.channel.webhooks(), name='Captain Hook')
-    if webhook is None:
-        webhook = await ctx.channel.create_webhook(name='Egg')
-    ryan = get_ryan_info(ctx)
-    if ryan[0] == '':
-        return
-
-    await asyncio.sleep(6)
-    await webhook.send(content='Nice try.', username=ryan[0], avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(3)
-    await ctx.send('Shut up Ryan.')
-
-    await asyncio.sleep(7)
-    await webhook.send(content='Oh real funny, you made it say that whenever I send a message.', username=ryan[0],
-                       avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(3)
-    await ctx.send('Shut up Ryan.')
-
-    await asyncio.sleep(3)
-    await webhook.send(content='sdc', username=ryan[0],
-                       avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(3)
-    await ctx.send('What did you just fucking say?')
-
-    await asyncio.sleep(5)
-    await webhook.send(content='LOL custom message for that, really?', username=ryan[0],
-                       avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(3)
-    await ctx.send('No, it\'s not a custom message for THAT, fuck you.')
-
-    await asyncio.sleep(2)
-    await webhook.send(content='Wtf...', username=ryan[0],
-                       avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(5)
-    await ctx.send('How about I show the world what you did with that hot guy friend of yours.')
-
-    await asyncio.sleep(3)
-    await webhook.send(content='You wouldn\'t dare.', username=ryan[0],
-                       avatar_url=str(ryan[1]))
-
-    await asyncio.sleep(4)
-    await ctx.send('https://imgur.com/8R4LnWb')
-    await asyncio.sleep(6)
-    await ctx.send('Never defy me again.')
-
-
-def get_ryan_info(ctx):
-    name = ''
-    avatar_url = ''
-    for m in ctx.message.guild.members:
-        if m.id == 98552231942434816:
-            name = m.display_name
-            avatar_url = m.avatar_url
-    return name, avatar_url
-
-
 @bot.command(name='portfolio', help='Shows all of your assets by volume', aliases=['pf'])
 async def portfolio_cmd(ctx, *args):
     if len(args) != 0:
@@ -238,59 +174,6 @@ async def reset(ctx):
     await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
 
 
-# Coindesk API
-# def get_crypto_price_data(code):
-#     crypto_price_url = 'https://production.api.coindesk.com/v2/price/values/' \
-#                        '{code}?start_date={start_date}&end_date={end_date}&ohlc=false'
-#
-#     end_date = datetime.now(timezone.utc)
-#     start_date = end_date - timedelta(days=1)
-#     url = crypto_price_url.format(code=code.upper(),
-#                                   start_date=start_date.strftime('%Y-%m-%dT%H:%M'),
-#                                   end_date=end_date.strftime('%Y-%m-%dT%H:%M'))
-#     response = requests.get(url)
-#     data = response.json()
-#     crypto_name = data['data']['name']
-#     previous_close_24_hr = data["data"]["entries"][0][1]
-#     try:
-#         current_price = data["data"]["entries"][95][1]
-#     except IndexError:
-#         current_price = data["data"]["entries"][94][1]
-#     daily_change_amt = round(current_price - previous_close_24_hr, 2)
-#     daily_change_percent = round((daily_change_amt / previous_close_24_hr) * 100, 2)
-#
-#     return {'name': crypto_name,
-#             'current_price': str(round(current_price, 2)),
-#             'daily_change_amt': str(daily_change_amt),
-#             'daily_change_percent': str(daily_change_percent)}
-
-
-# Crypto.com API
-# def get_crypto_price_data(code):
-#     asset_info = None
-#     page = 1
-#     total_pages = 999
-#     while asset_info is None or page > total_pages:
-#         print('Page ' + str(page))
-#         crypto_price_url = 'https://crypto.com/price/coin-data/summary/by_market_cap_page_{page}.json'
-#         response = requests.get(crypto_price_url.format(page=page))
-#         total_pages = response.json()['page_count']
-#         data = response.json()['tokens']
-#         asset_info = next((a for a in data if a['symbol'].lower() == code.lower()), None)
-#         page += 1
-#
-#     crypto_name = asset_info['name']
-#     current_price = asset_info['usd_price']
-#     daily_change_percent = round(asset_info['usd_change_24h'] * 100, 2)
-#     daily_change_amt = current_price * asset_info['usd_change_24h']
-#
-#     return {'name': crypto_name,
-#             'current_price': str(round(current_price, 2)),
-#             'daily_change_amt': str(daily_change_amt),
-#             'daily_change_percent': str(daily_change_percent)}
-
-
-# Binance API
 def get_crypto_price_data(code):
     crypto_price_url = 'https://www.binance.com/gateway-api/v2/public/asset-service/product/get-products?includeEtf=false'
 
