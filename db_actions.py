@@ -124,22 +124,16 @@ def get_asset_units(discord_id, asset):
     ).order_by(asc(transaction.c.transaction_date))).fetchall()
 
     vol_total = 0
-    paid_total = 0
-    cost_basis = 0
-    purchase_vol = 0
+    average_price = 0
     for t in transactions:
         if t.is_sale == 1:
             vol_total -= t.volume
             if int(vol_total) == 0:
-                paid_total = 0
-                purchase_vol = 0
+                average_price = 0
         else:
+            average_price = (((average_price * vol_total) + (t.price_per_unit * t.volume)) / (vol_total + t.volume))
             vol_total += t.volume
-            purchase_vol += t.volume
-            paid_total += (t.volume * t.price_per_unit)
-    if vol_total > 0:
-        cost_basis = paid_total / purchase_vol
-    return vol_total, cost_basis
+    return vol_total, average_price
 
 
 def get_all_assets(discord_id):
