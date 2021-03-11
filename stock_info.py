@@ -255,7 +255,7 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
     else:
         volume = amount
     total = float(volume) * float(price)
-    if int(total) == 0:
+    if float(total) == 0:
         if is_sale == 1:
             return 'You don\'t have any ' + asset.upper() + '.'
         else:

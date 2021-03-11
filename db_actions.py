@@ -131,7 +131,8 @@ def get_asset_units(discord_id, asset):
             if int(vol_total) == 0:
                 average_price = 0
         else:
-            average_price = (((average_price * vol_total) + (t.price_per_unit * t.volume)) / (vol_total + t.volume))
+            if vol_total + t.volume > 0:
+                average_price = (((average_price * vol_total) + (t.price_per_unit * t.volume)) / (vol_total + t.volume))
             vol_total += t.volume
     return vol_total, average_price
 
