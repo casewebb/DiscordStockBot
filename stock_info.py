@@ -432,12 +432,12 @@ def format_portfolio(assets_info):
     assets = assets_info[0]
     for index, asset in enumerate(assets):
         decimals = 3 if assets[index]['avg_price'] < 10 else 2
-        p_string += '\n{asset} Volume: {volume}Value: ${value}Average Paid Price: ${avg_price}' \
+        p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Paid Price: ${avg_price}' \
                     'Current Price: ${current_price} ({pcnt_chg}%)'.format(
             asset=str(assets[index]['name']).upper().ljust(10),
             volume=str(round(assets[index]['shares'], 4)).ljust(15),
-            value=str(round(assets[index]['current_value'], 2)).ljust(15),
-            avg_price=str(round(assets[index]['avg_price'], decimals)).ljust(15),
+            value=str(round(assets[index]['current_value'], 2)).ljust(12),
+            avg_price=str(round(assets[index]['avg_price'], decimals)).ljust(10),
             current_price=str(round(assets[index]['current_unit_price'], decimals)).ljust(10),
             pcnt_chg=str(round(get_pcnt_change(assets[index]['current_unit_price'], assets[index]['avg_price']), 2)))
         if len(p_string) > 1750:
