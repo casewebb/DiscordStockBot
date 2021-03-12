@@ -14,16 +14,10 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', help_command=None, intents=intents)
 load_dotenv()
 
-TEST_TOKEN = os.getenv('TEST_TOKEN')
-REAL_TOKEN = os.getenv('REAL_TOKEN')
+TOKEN = os.getenv('TOKEN')
 
 message_str = '{code} ({full_name}) : ${current_price} ' \
               'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}'
-
-help_message = 'Available Cryptocurrency tags: BTC, ETH, XRP, BCH, ADA, XLM, NEO, LTC, EOS, XEM, IOTA,' \
-               ' DASH, XMR, TRX, ICX, ETC, QTUM, BTG, LSK, USDT, OMG, ZEC, SC, ZRX, REP, WAVES, MKR, DCR,' \
-               ' BAT, LRC, KNC, BNT, LINK, CVC, STORJ, ANT, SNGLS, MANA, MLN, DNT, NMR, DAI, ATOM, XTZ,' \
-               ' NANO, WBTC, BSV, DOGE, USDC, OXT, ALGO, BAND, BTT, FET, KAVA, PAX, PAXG, REN'
 
 
 @bot.before_invoke
@@ -73,7 +67,7 @@ async def crypto_price_cmd(ctx, code):
                                           daily_change_percent=crypto_data['daily_change_percent'],
                                           wsb_info=''))
     except KeyError:
-        await ctx.send('Unable to find price information for ' + code.upper() + '\n' + help_message)
+        await ctx.send('Unable to find price information for ' + code.upper())
 
 
 @bot.command(name='buy', help='Buy an asset. !buy [stock/crypto] [ticker] [amount]')
@@ -121,15 +115,15 @@ async def liquidate_cmd(ctx):
     discord_id = ctx.message.author.id
     discord_name = ctx.message.author.name
     assets = db_actions.get_all_assets(ctx.message.author.id)
-    for index, asset in enumerate(assets):
-        if assets[index]['name'].lower() == 'usdollar':
+    for asset in assets:
+        if asset['name'].lower() == 'usdollar':
             continue
-        if assets[index]['is_crypto']:
-            price = get_crypto_price_data(assets[index]['name'])['current_price']
+        if asset['is_crypto']:
+            price = get_crypto_price_data(asset['name'])['current_price']
         else:
-            price = get_stock_price_data(assets[index]['name'])['current_price']
-        await ctx.send(transact_asset(discord_id, discord_name, assets[index]['name'],
-                                      'max', price, 1, assets[index]['is_crypto']))
+            price = get_stock_price_data(asset['name'])['current_price']
+        await ctx.send(transact_asset(discord_id, discord_name, asset['name'],
+                                      'max', price, 1, asset['is_crypto']))
     await ctx.send('All assets sold.')
 
 
@@ -157,7 +151,7 @@ async def portfolio_cmd(ctx, *args):
 
 @bot.command(name='history', help='Shows 10 most recent transactions')
 async def history_cmd(ctx):
-    await ctx.send("```" + get_formatted_transaction_history(ctx.message.author.id) + "```")
+    await ctx.send("```" + format_transaction_history(ctx.message.author.id) + "```")
 
 
 @bot.command(name='leaderboard', help='Who da winner?', aliases=['lb'])
@@ -165,7 +159,7 @@ async def leaderboard_cmd(ctx):
     mem_dict = {}
     for m in ctx.message.guild.members:
         mem_dict[m.id] = m.name
-    await ctx.send(get_formatted_leaderboard(mem_dict))
+    await ctx.send(format_leaderboard(mem_dict))
 
 
 @bot.command(name='reset', help='Resets your account back to $50,000 USD.')
@@ -245,21 +239,21 @@ def get_wsb_hits(code):
 
 
 def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
+    price = float(price)
     if amount == 'max':
         if is_sale == 1:
             volume = db_actions.get_asset_units(discord_id, asset)[0]
         else:
-            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR')[0] / float(price)
+            volume = db_actions.get_asset_units(discord_id, 'USDOLLAR')[0] / price
     elif '$' in amount:
-        volume = float(amount.replace('$', '')) / float(price)
+        if float(amount.replace('$', '')) <= 0:
+            return "You can only trade positive amounts of an asset."
+        volume = float(amount.replace('$', '')) / price
     else:
-        volume = amount
-    total = float(volume) * float(price)
-    if float(total) == 0:
-        if is_sale == 1:
-            return 'You don\'t have any ' + asset.upper() + '.'
-        else:
-            return 'You don\'t have any money.'
+        if float(amount) <= 0:
+            return "You can only trade positive amounts of an asset."
+        volume = float(amount)
+    total = volume * price
 
     transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
     transact_type = 'Bought' if is_sale == 0 else 'Sold'
@@ -268,11 +262,11 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
                ' USD Balance = ${new_bal}'.format(
             discord_name=discord_name,
             transact_type=transact_type,
-            volume=round(float(volume), 4),
+            volume=round(volume, 4),
             asset=asset.upper(),
-            cost_per_unit=round(float(price), 2),
+            cost_per_unit=round(price, 2),
             total=round(total, 2),
-            new_bal=str(round(float(transaction_result.get('available_funds')))))
+            new_bal=round(transaction_result.get('available_funds')))
     else:
         if transaction_result.get('message') == 'Insufficient Funds':
             return 'Sorry {discord_name}, you\'re too poor. Available Balance: ${available_bal} ' \
@@ -290,21 +284,20 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
 
 
 def get_price_of_asset(code, is_crypto):
-    return get_crypto_price_data(code)['current_price'] if is_crypto == 1 \
-        else get_stock_price_data(code)['current_price']
+    return float(get_crypto_price_data(code)['current_price']) if is_crypto == 1 \
+        else float(get_stock_price_data(code)['current_price'])
 
 
 def check_balance(discord_id):
     assets = db_actions.get_all_assets(discord_id)
-    for index, asset in enumerate(assets):
-        if assets[index]['name'] == 'USDOLLAR':
-            assets[index]['current_value'] = assets[index]['shares']
-            assets[index]['current_unit_price'] = assets[index]['avg_price']
+    for asset in assets:
+        if asset['name'] == 'USDOLLAR':
+            asset['current_value'] = asset['shares']
+            asset['current_unit_price'] = asset['avg_price']
         else:
-            assets[index]['current_unit_price'] = float(get_price_of_asset(assets[index]['name'],
-                                                                           assets[index]['is_crypto']))
-            assets[index]['current_value'] = assets[index]['current_unit_price'] * float(assets[index]['shares'])
-    total = sum(float(assets[index]['current_value']) for index, asset in enumerate(assets))
+            asset['current_unit_price'] = get_price_of_asset(asset['name'], asset['is_crypto'])
+            asset['current_value'] = asset['current_unit_price'] * asset['shares']
+    total = sum(asset['current_value'] for asset in assets)
 
     return assets, total
 
@@ -313,16 +306,16 @@ def format_portfolio(assets_info):
     pages = []
     p_string = 'Total Value: $' + str(round(assets_info[1], 2)) + "\n"
     assets = assets_info[0]
-    for index, asset in enumerate(assets):
-        decimals = 3 if assets[index]['avg_price'] < 10 else 2
+    for asset in assets:
+        decimals = 3 if asset['avg_price'] < 10 else 2
         p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Paid Price: ${avg_price}' \
                     'Current Price: ${current_price} ({pcnt_chg}%)'.format(
-            asset=str(assets[index]['name']).upper().ljust(10),
-            volume=str(round(assets[index]['shares'], 4)).ljust(15),
-            value=str(round(assets[index]['current_value'], 2)).ljust(12),
-            avg_price=str(round(assets[index]['avg_price'], decimals)).ljust(10),
-            current_price=str(round(assets[index]['current_unit_price'], decimals)).ljust(10),
-            pcnt_chg=str(round(get_pcnt_change(assets[index]['current_unit_price'], assets[index]['avg_price']), 2)))
+            asset=asset['name'].upper().ljust(10),
+            volume=str(round(asset['shares'], 4)).ljust(15),
+            value=str(round(asset['current_value'], 2)).ljust(12),
+            avg_price=str(round(asset['avg_price'], decimals)).ljust(10),
+            current_price=str(round(asset['current_unit_price'], decimals)).ljust(10),
+            pcnt_chg=str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)))
         if len(p_string) > 1750:
             pages.append(p_string)
             p_string = ''
@@ -334,7 +327,7 @@ def get_pcnt_change(val1, val2):
     return (val1 - val2) / val2 * 100
 
 
-def get_formatted_leaderboard(server_members):
+def format_leaderboard(server_members):
     users = db_actions.get_all_users()
     user_totals = []
     for user in users:
@@ -349,7 +342,7 @@ def get_formatted_leaderboard(server_members):
     return lb_string
 
 
-def get_formatted_transaction_history(discord_id):
+def format_transaction_history(discord_id):
     transactions = db_actions.get_transaction_history(discord_id)
     transactions_string = 'Recent Transactions:'
     for t in transactions:
@@ -365,4 +358,4 @@ def get_formatted_transaction_history(discord_id):
     return transactions_string
 
 
-bot.run(REAL_TOKEN)
+bot.run(TOKEN)

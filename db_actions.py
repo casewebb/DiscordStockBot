@@ -69,9 +69,9 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
     if users == 0:
         initialize_new_user(discord_id)
 
-    available_bal = get_available_usd_balance(discord_id)
+    available_bal = get_asset_units(discord_id, 'USDOLLAR')[0]
     if is_sale == 0:
-        purchase_req_price = float(price_per_unit) * float(volume)
+        purchase_req_price = price_per_unit * volume
         new_bal = available_bal - purchase_req_price
         if available_bal >= purchase_req_price:
             bal_upd = (
@@ -82,12 +82,12 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
         else:
             return {'is_successful': False,
                     'message': 'Insufficient Funds',
-                    'transaction_cost': str(purchase_req_price),
-                    'available_funds': str(available_bal)}
+                    'transaction_cost': purchase_req_price,
+                    'available_funds': available_bal}
     else:
         available_units = get_asset_units(discord_id, asset)[0]
-        if float(available_units) >= float(volume):
-            new_bal = available_bal + (float(price_per_unit) * float(volume))
+        if available_units >= volume:
+            new_bal = available_bal + (price_per_unit * volume)
             bal_upd = (
                 update(transaction).where(
                     and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
@@ -96,26 +96,18 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
         else:
             return {'is_successful': False,
                     'message': 'Insufficient Shares',
-                    'available_funds': str(available_units)}
+                    'available_funds': available_units}
 
     try:
         session.execute(t_ins)
         session.execute(bal_upd)
         session.flush()
         return {'is_successful': True, 'message': 'Successful',
-                'available_funds': str(new_bal)}
+                'available_funds': new_bal}
     except Exception as e:
         print(e)
         session.rollback()
         return {'is_successful': False, 'message': 'Database Error'}
-
-
-def get_available_usd_balance(discord_id):
-    balance = session.execute(select([transaction]).where(
-        and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')
-    )).fetchone()
-
-    return balance.volume
 
 
 def get_asset_units(discord_id, asset):
@@ -142,20 +134,18 @@ def get_all_assets(discord_id):
         (transaction.c.discord_id == discord_id)
     )).fetchall()
 
-    asset_vol_dict = {}
-    rolling_index = 0
-    for index, asset in enumerate(assets):
+    asset_vol_list = []
+    for asset in assets:
         info = get_asset_units(discord_id, asset.asset_code)
         total = info[0]
         avg_cost = info[1]
         if total > 0:
-            asset_vol_dict[rolling_index] = {'name': asset.asset_code,
-                                             'shares': total,
-                                             'current_value': 0,
-                                             'avg_price': avg_cost,
-                                             'is_crypto': asset.is_crypto}
-            rolling_index += 1
-    return asset_vol_dict
+            asset_vol_list.append({'name': asset.asset_code,
+                                   'shares': total,
+                                   'current_value': 0,
+                                   'avg_price': avg_cost,
+                                   'is_crypto': asset.is_crypto})
+    return asset_vol_list
 
 
 def get_transaction_history(discord_id):
