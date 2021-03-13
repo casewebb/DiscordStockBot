@@ -261,16 +261,16 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
     transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
     if transaction_result.get('is_successful'):
         if is_sale:
-            profit_loss = 'profit' if net_p_l >= 0.0 else 'loss'
-            return '{discord_name} sold {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
-                   ' Trade {profit_loss_str} = ${profit_loss_amt}. USD Balance = ${new_bal}.'.format(
+            profit_loss = '+' if net_p_l >= 0.0 else '-'
+            return '{discord_name} sold {volume} {asset} at ${cost_per_unit}ea. for ${total} ' \
+                   '({profit_loss_str}${profit_loss_amt}). USD Balance = ${new_bal}.'.format(
                 discord_name=discord_name,
                 volume=round(volume, 4),
                 asset=asset.upper(),
                 cost_per_unit=round(price, 2),
                 total=round(total, 2),
                 profit_loss_str=profit_loss,
-                profit_loss_amt=round(abs(net_p_l), 2),
+                profit_loss_amt='{:,.2f}'.format(abs(net_p_l)),
                 new_bal=round(transaction_result.get('available_funds')))
         else:
             return '{discord_name} bought {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
@@ -316,23 +316,50 @@ def check_balance(discord_id):
     return assets, total
 
 
+# def format_portfolio(assets_info):
+#     pages = []
+#     p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n"
+#     assets = assets_info[0]
+#     for asset in assets:
+#         decimals = 3 if asset['avg_price'] < 10 and asset['name'].upper() != 'USDOLLAR' else 2
+#         p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Cost: ${avg_price}' \
+#                     'Current Cost: ${current_price} ({pcnt_chg}%)'.format(
+#             asset=asset['name'].upper().ljust(10),
+#             volume=str(round(asset['shares'], 4)).ljust(15),
+#             value='{:,.2f}'.format(asset['current_value']).ljust(12),
+#             avg_price='{:,.{decimals}f}'.format(asset['avg_price'], decimals=decimals).ljust(10),
+#             current_price='{:,.{decimals}f}'.format(asset['current_unit_price'], decimals=decimals).ljust(10),
+#             pcnt_chg=str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)))
+#         if len(p_string) > 1750:
+#             pages.append(p_string)
+#             p_string = ''
+#     pages.append(p_string)
+#     return pages
+
+
 def format_portfolio(assets_info):
     pages = []
-    p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n"
+    p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n\n"
     assets = assets_info[0]
+    p_string += '|Asset'.ljust(11) + '|Volume'.ljust(15) + '|Value'.ljust(15) + '|Average Cost'.ljust(16) + \
+                '|Current Cost'.ljust(14) + '|% Change|'
+    p_string += '\n|----------|--------------|--------------|---------------|-------------|--------|'
+
     for asset in assets:
         decimals = 3 if asset['avg_price'] < 10 and asset['name'].upper() != 'USDOLLAR' else 2
-        p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Paid Price: ${avg_price}' \
-                    'Current Price: ${current_price} ({pcnt_chg}%)'.format(
+        p_string += '\n|{asset}|{volume}|${value}|${avg_price}|${current_price}|{pcnt_chg}|'.format(
             asset=asset['name'].upper().ljust(10),
-            volume=str(round(asset['shares'], 4)).ljust(15),
-            value='{:,.2f}'.format(asset['current_value']).ljust(12),
-            avg_price='{:,.{decimals}f}'.format(asset['avg_price'], decimals=decimals).ljust(10),
-            current_price='{:,.{decimals}f}'.format(asset['current_unit_price'], decimals=decimals).ljust(10),
-            pcnt_chg=str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)))
+            volume=str(round(asset['shares'], 4)).ljust(14),
+            value='{:,.2f}'.format(asset['current_value']).ljust(13),
+            avg_price='{:,.{decimals}f}'.format(asset['avg_price'], decimals=decimals).ljust(14),
+            current_price='{:,.{decimals}f}'.format(asset['current_unit_price'], decimals=decimals).ljust(12),
+            pcnt_chg=str(str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)) + '%').ljust(
+                8))
         if len(p_string) > 1750:
             pages.append(p_string)
-            p_string = ''
+            p_string = '|Asset'.ljust(11) + '|Volume'.ljust(15) + '|Value'.ljust(15) + '|Average Cost'.ljust(16) + \
+                       '|Current Cost'.ljust(14) + '|% Change|'
+            p_string += '\n|----------|--------------|--------------|---------------|-------------|--------|'
     pages.append(p_string)
     return pages
 
