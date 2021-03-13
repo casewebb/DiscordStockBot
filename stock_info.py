@@ -52,7 +52,7 @@ async def stock_price_cmd(ctx, code):
                                           daily_change_amt=price_data['daily_change_amt'],
                                           daily_change_percent=price_data['daily_change_percent'],
                                           wsb_info=wsb_info))
-    except (AssertionError, KeyError):
+    except Exception:
         await ctx.send('Unable to find price information for ' + code.upper())
 
 
@@ -66,7 +66,7 @@ async def crypto_price_cmd(ctx, code):
                                           daily_change_amt=crypto_data['daily_change_amt'],
                                           daily_change_percent=crypto_data['daily_change_percent'],
                                           wsb_info=''))
-    except KeyError:
+    except Exception:
         await ctx.send('Unable to find price information for ' + code.upper())
 
 
@@ -132,7 +132,7 @@ async def portfolio_cmd(ctx, *args):
     if len(args) != 0:
         user_id = ''
         for m in ctx.message.guild.members:
-            if m.name == args[0]:
+            if m.name.lower() == args[0].lower() or m.display_name.lower() == args[0].lower():
                 user_id = m.id
         if user_id == '':
             await ctx.send('Can \'t find portfolio for ' + args[0])
@@ -159,7 +159,7 @@ async def leaderboard_cmd(ctx):
     mem_dict = {}
     for m in ctx.message.guild.members:
         mem_dict[m.id] = m.name
-    await ctx.send(format_leaderboard(mem_dict))
+    await ctx.send("```" + format_leaderboard(mem_dict) + "```")
 
 
 @bot.command(name='reset', help='Resets your account back to $50,000 USD.')
@@ -240,9 +240,11 @@ def get_wsb_hits(code):
 
 def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
     price = float(price)
+    info = db_actions.get_asset_units(discord_id, asset)
+    avg_price = info[1]
     if amount == 'max':
         if is_sale == 1:
-            volume = db_actions.get_asset_units(discord_id, asset)[0]
+            volume = info[0]
         else:
             volume = db_actions.get_asset_units(discord_id, 'USDOLLAR')[0] / price
     elif '$' in amount:
@@ -254,19 +256,31 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
             return "You can only trade positive amounts of an asset."
         volume = float(amount)
     total = volume * price
+    net_p_l = total - (volume * avg_price)
 
     transaction_result = db_actions.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
-    transact_type = 'Bought' if is_sale == 0 else 'Sold'
     if transaction_result.get('is_successful'):
-        return '{discord_name} {transact_type} {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
-               ' USD Balance = ${new_bal}'.format(
-            discord_name=discord_name,
-            transact_type=transact_type,
-            volume=round(volume, 4),
-            asset=asset.upper(),
-            cost_per_unit=round(price, 2),
-            total=round(total, 2),
-            new_bal=round(transaction_result.get('available_funds')))
+        if is_sale:
+            profit_loss = 'profit' if net_p_l >= 0.0 else 'loss'
+            return '{discord_name} sold {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
+                   ' Trade {profit_loss_str} = ${profit_loss_amt}. USD Balance = ${new_bal}'.format(
+                discord_name=discord_name,
+                volume=round(volume, 4),
+                asset=asset.upper(),
+                cost_per_unit=round(price, 2),
+                total=round(total, 2),
+                profit_loss_str=profit_loss,
+                profit_loss_amt=round(abs(net_p_l), 2),
+                new_bal=round(transaction_result.get('available_funds')))
+        else:
+            return '{discord_name} bought {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
+                   ' USD Balance = ${new_bal}'.format(
+                discord_name=discord_name,
+                volume=round(volume, 4),
+                asset=asset.upper(),
+                cost_per_unit=round(price, 2),
+                total=round(total, 2),
+                new_bal=round(transaction_result.get('available_funds')))
     else:
         if transaction_result.get('message') == 'Insufficient Funds':
             return 'Sorry {discord_name}, you\'re too poor. Available Balance: ${available_bal} ' \

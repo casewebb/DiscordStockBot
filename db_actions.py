@@ -120,7 +120,7 @@ def get_asset_units(discord_id, asset):
     for t in transactions:
         if t.is_sale == 1:
             vol_total -= t.volume
-            if int(vol_total) == 0:
+            if float(vol_total) == 0:
                 average_price = 0
         else:
             if vol_total + t.volume > 0:
