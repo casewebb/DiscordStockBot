@@ -17,7 +17,7 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 
 message_str = '{code} ({full_name}) : ${current_price} ' \
-              'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}'
+              'Daily Change: ${daily_change_amt} ({daily_change_percent}%){wsb_info}.'
 
 
 @bot.before_invoke
@@ -263,7 +263,7 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
         if is_sale:
             profit_loss = 'profit' if net_p_l >= 0.0 else 'loss'
             return '{discord_name} sold {volume} {asset} at ${cost_per_unit}ea. for ${total}.' \
-                   ' Trade {profit_loss_str} = ${profit_loss_amt}. USD Balance = ${new_bal}'.format(
+                   ' Trade {profit_loss_str} = ${profit_loss_amt}. USD Balance = ${new_bal}.'.format(
                 discord_name=discord_name,
                 volume=round(volume, 4),
                 asset=asset.upper(),
@@ -318,17 +318,17 @@ def check_balance(discord_id):
 
 def format_portfolio(assets_info):
     pages = []
-    p_string = 'Total Value: $' + str(round(assets_info[1], 2)) + "\n"
+    p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n"
     assets = assets_info[0]
     for asset in assets:
-        decimals = 3 if asset['avg_price'] < 10 else 2
+        decimals = 3 if asset['avg_price'] < 10 and asset['name'].upper() != 'USDOLLAR' else 2
         p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Paid Price: ${avg_price}' \
                     'Current Price: ${current_price} ({pcnt_chg}%)'.format(
             asset=asset['name'].upper().ljust(10),
             volume=str(round(asset['shares'], 4)).ljust(15),
-            value=str(round(asset['current_value'], 2)).ljust(12),
-            avg_price=str(round(asset['avg_price'], decimals)).ljust(10),
-            current_price=str(round(asset['current_unit_price'], decimals)).ljust(10),
+            value='{:,.2f}'.format(asset['current_value']).ljust(12),
+            avg_price='{:,.{decimals}f}'.format(asset['avg_price'], decimals=decimals).ljust(10),
+            current_price='{:,.{decimals}f}'.format(asset['current_unit_price'], decimals=decimals).ljust(10),
             pcnt_chg=str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)))
         if len(p_string) > 1750:
             pages.append(p_string)
@@ -352,7 +352,7 @@ def format_leaderboard(server_members):
     for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):
         lb_string += '{place}. {name}: ${total}\n'.format(place=index + 1,
                                                           name=user['name'],
-                                                          total=round(user['total'], 2))
+                                                          total='{:,.2f}'.format(user['total']))
     return lb_string
 
 
