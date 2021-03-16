@@ -41,6 +41,12 @@ async def help_cmd(ctx):
     await ctx.send(message)
 
 
+@bot.command(name='setname')
+async def set_name_cmd(ctx, name):
+    discord_id = ctx.message.author.id
+    db_actions.set_display_name(discord_id, name)
+
+
 @bot.command(name='stock', help='Shows the price of a given stock (ex. !stock gme)', aliases=['s'])
 async def stock_price_cmd(ctx, code):
     wsb_info = get_wsb_hits(code)
@@ -129,11 +135,16 @@ async def liquidate_cmd(ctx):
 
 @bot.command(name='portfolio', help='Shows all of your assets by volume', aliases=['pf'])
 async def portfolio_cmd(ctx, *args):
+    users = db_actions.get_all_users()
     if len(args) != 0:
         user_id = ''
         for m in ctx.message.guild.members:
             if m.name.lower() == args[0].lower() or m.display_name.lower() == args[0].lower():
                 user_id = m.id
+        if user_id == '':
+            for index, user in enumerate(users[1]):
+                if user.lower() == args[0].lower():
+                    user_id = users[0][index]
         if user_id == '':
             await ctx.send('Can \'t find portfolio for ' + args[0])
             return
@@ -316,27 +327,6 @@ def check_balance(discord_id):
     return assets, total
 
 
-# def format_portfolio(assets_info):
-#     pages = []
-#     p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n"
-#     assets = assets_info[0]
-#     for asset in assets:
-#         decimals = 3 if asset['avg_price'] < 10 and asset['name'].upper() != 'USDOLLAR' else 2
-#         p_string += '\n{asset} Vol: {volume}Value: ${value}Avg. Cost: ${avg_price}' \
-#                     'Current Cost: ${current_price} ({pcnt_chg}%)'.format(
-#             asset=asset['name'].upper().ljust(10),
-#             volume=str(round(asset['shares'], 4)).ljust(15),
-#             value='{:,.2f}'.format(asset['current_value']).ljust(12),
-#             avg_price='{:,.{decimals}f}'.format(asset['avg_price'], decimals=decimals).ljust(10),
-#             current_price='{:,.{decimals}f}'.format(asset['current_unit_price'], decimals=decimals).ljust(10),
-#             pcnt_chg=str(round(get_pcnt_change(asset['current_unit_price'], asset['avg_price']), 2)))
-#         if len(p_string) > 1750:
-#             pages.append(p_string)
-#             p_string = ''
-#     pages.append(p_string)
-#     return pages
-
-
 def format_portfolio(assets_info):
     pages = []
     p_string = 'Total Value: $' + '{:,.2f}'.format(assets_info[1]) + "\n\n"
@@ -371,9 +361,10 @@ def get_pcnt_change(val1, val2):
 def format_leaderboard(server_members):
     users = db_actions.get_all_users()
     user_totals = []
-    for user in users:
+    for index, user in enumerate(users[0]):
         if int(user) in server_members.keys():
-            user_totals.append({'name': server_members[int(user)], 'total': check_balance(user)[1]})
+            name = server_members[int(user)] if users[1][index] is None else users[1][index]
+            user_totals.append({'name': name, 'total': check_balance(user)[1]})
 
     lb_string = ''
     for index, user in enumerate(sorted(user_totals, key=lambda i: i['total'], reverse=True)):

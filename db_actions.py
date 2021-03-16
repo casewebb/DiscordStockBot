@@ -4,13 +4,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
 meta = MetaData()
-engine = create_engine("mysql://root:admin@localhost/discord_stock_bot")
+engine = create_engine("mysql://root:admin@localhost/discord_stock_bot", pool_recycle=3600, pool_pre_ping=True)
 Session = sessionmaker(bind=engine, autocommit=True)
 session = Session()
 
 user = Table(
     'user', meta,
     Column('discord_id', String(17), primary_key=True),
+    Column('display_name', String(30)),
     Column('start_date', DateTime, server_default=func.now()),
 )
 
@@ -186,7 +187,19 @@ def reset(discord_id):
 
 def get_all_users():
     user_ids = []
+    user_names = []
     users = session.execute(select([user])).fetchall()
     for u in users:
         user_ids.append(u.discord_id)
-    return user_ids
+        user_names.append(u.display_name)
+    return user_ids, user_names
+
+
+def set_display_name(discord_id, name):
+    name_upd = (update(user).where(user.c.discord_id == discord_id).values(display_name=name))
+    try:
+        session.execute(name_upd)
+        session.flush()
+    except Exception as e:
+        print(e)
+        session.rollback()
