@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 import discord
 import requests
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from yahoo_fin import stock_info as si
 
@@ -28,6 +28,9 @@ async def wake(x):
 @bot.command(name='help')
 async def help_cmd(ctx):
     message = "```Commands:\n" \
+              "  alert       Set a price alert for a given asset. !alert [crypto/stock] [ticker] [< or >] [price]\n" \
+              "  alerts      Shows all active alerts.\n" \
+              "  xalert      Delete an alert. !xalert [id] *id comes from !alerts command.\n" \
               "  crypto      Shows the price of a given cryptocurrency. (ex. !crypto btc)\n" \
               "  stock       Shows the price of a given stock. (ex. !stock gme)\n" \
               "  buy         Buy an asset. !buy [stock/crypto] [ticker] [amount]\n" \
@@ -177,6 +180,65 @@ async def leaderboard_cmd(ctx):
 async def reset(ctx):
     db_actions.reset(ctx.message.author.id)
     await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
+
+
+@bot.command(name='alert', help='Set a price alert for a given asset. !alert [crypto/stock] [ticker] [< or >] [price]')
+async def alert_cmd(ctx, stock_crypto, code, direction, price):
+    channel_id = ctx.channel.id
+    is_crypto = 0 if (stock_crypto.lower() == 'stock' or stock_crypto.lower() == 's') else 1
+    price = price.replace('$', '').replace(',', '')
+    if direction == '<':
+        direction = 1
+    elif direction == '>':
+        direction = 0
+    else:
+        return
+
+    db_actions.create_alert(channel_id=channel_id,
+                            asset=code,
+                            is_crypto=is_crypto,
+                            is_less_than=direction,
+                            price=price)
+
+    await ctx.send(format_alerts(ctx.channel.id))
+
+
+@bot.command(name='alerts', help='View all active alerts.')
+async def alerts_cms(ctx):
+    await ctx.send(format_alerts(ctx.channel.id))
+
+
+@bot.command(name='xalert', help='Delete an alert !xalert [id]')
+async def delete_alert_cmd(ctx, alert_id):
+    db_actions.delete_alert(alert_id)
+    await ctx.send('Alert Deleted.')
+
+
+# BACKGROUND TASKS
+
+@tasks.loop(minutes=5)
+async def check_alerts():
+    alerts = db_actions.get_all_alerts()
+    for a in alerts:
+        channel = bot.get_channel(int(a.channel_id))
+        if channel is None:
+            return
+        current_price = get_crypto_price_data(a.asset_code)['current_price'] if a.is_crypto \
+            else get_stock_price_data(a.asset_code)['current_price']
+        if a.is_less_than:
+            if float(current_price) < float(a.price_per_unit):
+                await channel.send('```PRICE ALERT: {asset} below {alert_price}! Current price: {current_price}.```'
+                                   .format(asset=a.asset_code.upper(),
+                                           alert_price=str(round(a.price_per_unit, 2)),
+                                           current_price=str(round(float(current_price), 2))))
+                db_actions.delete_alert(a.id)
+        else:
+            if float(current_price) > float(a.price_per_unit):
+                await channel.send('```PRICE ALERT: {asset} above {alert_price}! Current price: {current_price}.```'
+                                   .format(asset=a.asset_code.upper(),
+                                           alert_price=str(round(a.price_per_unit, 2)),
+                                           current_price=str(round(float(current_price), 2))))
+                db_actions.delete_alert(a.id)
 
 
 def get_crypto_price_data(code):
@@ -390,4 +452,20 @@ def format_transaction_history(discord_id):
     return transactions_string
 
 
+def format_alerts(channel_id):
+    alerts = db_actions.get_all_alerts()
+    alerts_string = 'Active Alerts:'
+    if len(alerts) == 0:
+        return 'No Active Alerts for this Channel.'
+    for a in alerts:
+        if int(a.channel_id) == int(channel_id):
+            a_b_str = '<' if a.is_less_than else '>'
+            alerts_string += '\n[{id}] {asset} {above_below} {price}'.format(id=a.id,
+                                                                              asset=a.asset_code.upper(),
+                                                                              above_below=a_b_str,
+                                                                              price=round(a.price_per_unit, 2))
+    return '```' + alerts_string + '```'
+
+
+check_alerts.start()
 bot.run(TOKEN)

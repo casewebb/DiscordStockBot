@@ -27,6 +27,16 @@ transaction = Table(
     Column('transaction_date', DateTime, server_default=func.now()),
 )
 
+alert = Table(
+    'alert', meta,
+    Column('id', Integer, primary_key=True),
+    Column('channel_id', String(20)),
+    Column('asset_code', String(10)),
+    Column('price_per_unit', Float),
+    Column('is_crypto', Integer),
+    Column('is_less_than', Integer),
+)
+
 
 def create_database():
     meta.create_all(engine)
@@ -203,3 +213,41 @@ def set_display_name(discord_id, name):
     except Exception as e:
         print(e)
         session.rollback()
+
+
+# ALERTS
+
+def create_alert(channel_id, asset, is_crypto, is_less_than, price):
+    a_ins = alert.insert().values(channel_id=channel_id,
+                                  asset_code=asset,
+                                  is_crypto=is_crypto,
+                                  price_per_unit=price,
+                                  is_less_than=is_less_than)
+
+    try:
+        session.execute(a_ins)
+        session.flush()
+        return {'is_successful': True, 'message': 'Successful'}
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return {'is_successful': False, 'message': 'Database Error'}
+
+
+def get_all_alerts():
+    return session.execute(select([alert])).fetchall()
+
+
+def delete_alert(alert_id):
+    delete_alert_stmt = (
+        delete(alert).where(alert.c.id == alert_id)
+    )
+
+    try:
+        session.execute(delete_alert_stmt)
+        session.flush()
+        return {'is_successful': True, 'message': 'Success'}
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return {'is_successful': False, 'message': 'Database Error'}
