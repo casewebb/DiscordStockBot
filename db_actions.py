@@ -37,6 +37,20 @@ alert = Table(
     Column('is_less_than', Integer),
 )
 
+limit_transaction = Table(
+    'limit_transaction', meta,
+    Column('id', Integer, primary_key=True),
+    Column('discord_id', String(17), ForeignKey('user.discord_id')),
+    Column('channel_id', String(20)),
+    Column('asset_code', String(10)),
+    Column('volume', String(20)),
+    Column('price_per_unit', Float),
+    Column('is_sale', Integer),
+    Column('is_crypto', Integer),
+    Column('is_less_than', Integer),
+    Column('transaction_date', DateTime, server_default=func.now()),
+)
+
 
 def create_database():
     meta.create_all(engine)
@@ -215,6 +229,11 @@ def set_display_name(discord_id, name):
         session.rollback()
 
 
+def get_display_name(discord_id):
+    x = session.execute(select([user]).where(user.c.discord_id == discord_id)).fetchall()
+    return x[0].display_name
+
+
 # ALERTS
 
 def create_alert(channel_id, asset, is_crypto, is_less_than, price):
@@ -245,6 +264,51 @@ def delete_alert(alert_id):
 
     try:
         session.execute(delete_alert_stmt)
+        session.flush()
+        return {'is_successful': True, 'message': 'Success'}
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return {'is_successful': False, 'message': 'Database Error'}
+
+
+def create_limit_order(discord_id, channel_id, asset, volume, is_crypto, is_sale, is_less_than, price):
+    limit_ins = limit_transaction.insert().values(channel_id=channel_id,
+                                                  discord_id=discord_id,
+                                                  asset_code=asset,
+                                                  is_crypto=is_crypto,
+                                                  is_sale=is_sale,
+                                                  price_per_unit=price,
+                                                  volume=volume,
+                                                  is_less_than=is_less_than)
+
+    try:
+        session.execute(limit_ins)
+        session.flush()
+        return {'is_successful': True, 'message': 'Successful'}
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return {'is_successful': False, 'message': 'Database Error'}
+
+
+def get_limit_orders(discord_id):
+    if discord_id is None:
+        return session.execute(select([limit_transaction])).fetchall()
+    else:
+        return session.execute(select([limit_transaction]).where(
+            limit_transaction.c.discord_id == discord_id
+        )).fetchall()
+
+
+def delete_limit_order(order_id, discord_id):
+    delete_limit_stmt = (
+        delete(limit_transaction).where(and_(limit_transaction.c.id == order_id,
+                                             limit_transaction.c.discord_id == discord_id))
+    )
+
+    try:
+        session.execute(delete_limit_stmt)
         session.flush()
         return {'is_successful': True, 'message': 'Success'}
     except Exception as e:

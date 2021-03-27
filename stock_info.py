@@ -26,7 +26,7 @@ async def wake(x):
 
 
 @bot.command(name='help')
-async def help_cmd(ctx):
+async def help_cmd(ctx, *args):
     message = "```Commands:\n" \
               "  alert       Set a price alert for a given asset. !alert [crypto/stock] [ticker] [< or >] [price]\n" \
               "  alerts      Shows all active alerts.\n" \
@@ -35,12 +35,26 @@ async def help_cmd(ctx):
               "  stock       Shows the price of a given stock. (ex. !stock gme)\n" \
               "  buy         Buy an asset. !buy [stock/crypto] [ticker] [amount]\n" \
               "  sell        Sell an asset. !sell [stock/crypto] [ticker] [amount]\n" \
+              "  limit       !help limit for more info\n" \
               "  liquidate   Sell all assets at market value.\n" \
               "  portfolio   Shows all of your assets by volume.\n" \
               "  history     Shows 10 most recent transactions.\n" \
               "  leaderboard Shows ordered list of participants by portfolio value.\n" \
               "  reset       Resets your account back to $50,000 USD." \
               "```"
+    if len(args) > 0 and args[0] == 'limit':
+        limit_help_msg = '```Create a limit order. !limit [buy/sell] [crypto/stock] [amount] [ticker] [< or >] [price]\n' \
+                         '[amount] works the same as a normal buy/sell, you can use max, $ value, or number of units.\n\n' \
+                         'You can have as many orders as you want active, but it will not tell you whether your balance ' \
+                         'will allow the transaction to go through until the condition is met. ' \
+                         'So be sure you leave USD in ' \
+                         'your account for a purchase, or assets in your account for a sale.\n\n' \
+                         '!orders to see all of your active limit orders.\n' \
+                         '!xorder [id] ID comes from !orders command. This deletes a limit order.\n\n' \
+                         'Also I didn\'t test this. Fuck you.```'
+        await ctx.send(limit_help_msg)
+        return
+
     await ctx.send(message)
 
 
@@ -182,7 +196,8 @@ async def reset(ctx):
     await ctx.send(ctx.message.author.name + '\'s Balance Reset to $50000.')
 
 
-@bot.command(name='alert', help='Set a price alert for a given asset. !alert [crypto/stock] [ticker] [< or >] [price]')
+@bot.command(name='alert', help='Set a price alert for a given asset. !alert [crypto/stock] [ticker] [< or >] [price]',
+             aliases=['a'])
 async def alert_cmd(ctx, stock_crypto, code, direction, price):
     channel_id = ctx.channel.id
     is_crypto = 0 if (stock_crypto.lower() == 'stock' or stock_crypto.lower() == 's') else 1
@@ -204,7 +219,7 @@ async def alert_cmd(ctx, stock_crypto, code, direction, price):
 
 
 @bot.command(name='alerts', help='View all active alerts.')
-async def alerts_cms(ctx):
+async def alerts_cmd(ctx):
     await ctx.send(format_alerts(ctx.channel.id))
 
 
@@ -212,6 +227,43 @@ async def alerts_cms(ctx):
 async def delete_alert_cmd(ctx, alert_id):
     db_actions.delete_alert(alert_id)
     await ctx.send('Alert Deleted.')
+
+
+@bot.command(name='limit', help='!limit [buy/sell] [crypto/stock] [amount] [ticker] [< or >] [price]', aliases=['l'])
+async def limit_order_cmd(ctx, buy_sell, stock_crypto, amount, code, direction, price):
+    channel_id = ctx.channel.id
+    discord_id = ctx.message.author.id
+    is_crypto = 0 if (stock_crypto.lower() == 'stock' or stock_crypto.lower() == 's') else 1
+    is_sale = 0 if (buy_sell.lower() == 'buy' or buy_sell.lower() == 'b') else 1
+    price = price.replace('$', '').replace(',', '')
+    if direction == '<':
+        direction = 1
+    elif direction == '>':
+        direction = 0
+    else:
+        return
+
+    db_actions.create_limit_order(discord_id=discord_id,
+                                  channel_id=channel_id,
+                                  asset=code,
+                                  volume=amount,
+                                  is_crypto=is_crypto,
+                                  is_sale=is_sale,
+                                  is_less_than=direction,
+                                  price=price)
+
+    await ctx.send(format_limit_orders(discord_id))
+
+
+@bot.command(name='orders', help='View all active limit orders.')
+async def orders_cmd(ctx):
+    await ctx.send(format_limit_orders(ctx.message.author.id))
+
+
+@bot.command(name='xorder', help='Delete an order !xorder [id]')
+async def delete_order_cmd(ctx, order_id):
+    db_actions.delete_limit_order(order_id, ctx.message.author.id)
+    await ctx.send('Order Deleted.')
 
 
 # BACKGROUND TASKS
@@ -223,8 +275,14 @@ async def check_alerts():
         channel = bot.get_channel(int(a.channel_id))
         if channel is None:
             return
-        current_price = get_crypto_price_data(a.asset_code)['current_price'] if a.is_crypto \
-            else get_stock_price_data(a.asset_code)['current_price']
+        try:
+            current_price = get_crypto_price_data(a.asset_code)['current_price'] if a.is_crypto \
+                else get_stock_price_data(a.asset_code)['current_price']
+        except Exception:
+            await channel.send('Issue with alert ' + str(a.id) + ' it will be deleted.')
+            await channel.send(format_alerts(a.channel_id))
+            db_actions.delete_alert(a.id)
+            return
         if a.is_less_than:
             if float(current_price) < float(a.price_per_unit):
                 await channel.send('```PRICE ALERT: {asset} below {alert_price}! Current price: {current_price}.```'
@@ -239,6 +297,37 @@ async def check_alerts():
                                            alert_price=str(round(a.price_per_unit, 2)),
                                            current_price=str(round(float(current_price), 2))))
                 db_actions.delete_alert(a.id)
+
+
+@tasks.loop(minutes=5)
+async def check_limit_orders():
+    orders = db_actions.get_limit_orders(None)
+    for o in orders:
+        display_name = db_actions.get_display_name(o.discord_id)
+        channel = bot.get_channel(int(o.channel_id))
+        if channel is None:
+            return
+
+        try:
+            current_price = get_crypto_price_data(o.asset_code)['current_price'] if o.is_crypto \
+                else get_stock_price_data(o.asset_code)['current_price']
+        except Exception:
+            await channel.send('Issue with ' + display_name + '\'s order ' + str(o.id) + ' it will be deleted.')
+            await channel.send(format_limit_orders(o.discord_id))
+            db_actions.delete_limit_order(o.id, o.discord_id)
+            return
+        if o.is_less_than:
+            if float(current_price) < float(o.price_per_unit):
+                await channel.send(transact_asset(o.discord_id, display_name,
+                                                  o.asset_code, o.volume, current_price, o.is_sale,
+                                                  o.is_crypto))
+                db_actions.delete_limit_order(o.id, o.discord_id)
+        else:
+            if float(current_price) > float(o.price_per_unit):
+                await channel.send(transact_asset(o.discord_id, display_name,
+                                                  o.asset_code, o.volume, current_price, o.is_sale,
+                                                  o.is_crypto))
+                db_actions.delete_limit_order(o.id, o.discord_id)
 
 
 def get_crypto_price_data(code):
@@ -467,5 +556,27 @@ def format_alerts(channel_id):
     return '```' + alerts_string + '```'
 
 
+def format_limit_orders(discord_id):
+    orders = db_actions.get_limit_orders(discord_id)
+    orders_string = 'Active Limit Orders:'
+    if len(orders) == 0:
+        return 'You have no standing limit orders.'
+    for o in orders:
+        if int(o.discord_id) == int(discord_id):
+            b_s_str = 'Sell' if o.is_sale else 'Purchase'
+            a_b_str = '<' if o.is_less_than else '>'
+
+            orders_string += '\n[{id}] {buy_sell} {volume} {asset} when the price is {above_below} ${price}.'.format(
+                id=o.id,
+                asset=o.asset_code.upper(),
+                above_below=a_b_str,
+                price=round(o.price_per_unit, 2),
+                volume=o.volume,
+                buy_sell=b_s_str)
+
+    return '```' + orders_string + '```'
+
+
 check_alerts.start()
+check_limit_orders.start()
 bot.run(TOKEN)
