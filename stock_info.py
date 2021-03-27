@@ -461,9 +461,9 @@ def format_alerts(channel_id):
         if int(a.channel_id) == int(channel_id):
             a_b_str = '<' if a.is_less_than else '>'
             alerts_string += '\n[{id}] {asset} {above_below} {price}'.format(id=a.id,
-                                                                              asset=a.asset_code.upper(),
-                                                                              above_below=a_b_str,
-                                                                              price=round(a.price_per_unit, 2))
+                                                                             asset=a.asset_code.upper(),
+                                                                             above_below=a_b_str,
+                                                                             price=round(a.price_per_unit, 2))
     return '```' + alerts_string + '```'
 
 
