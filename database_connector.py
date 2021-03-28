@@ -62,22 +62,15 @@ def wake_up_db():
     session = Session()
 
 
-def initialize_new_user(discord_id):
-    ins = user.insert().values(discord_id=discord_id)
-    session.execute(ins)
-
-    init_insert = transaction.insert().values(discord_id=discord_id,
-                                              asset_code='USDOLLAR',
-                                              volume=50000,
-                                              price_per_unit=1,
-                                              is_sale=0,
-                                              is_crypto=0)
-
+def execute_write(stmt):
     try:
-        session.execute(init_insert)
+        session.execute(stmt)
         session.flush()
-    except Exception:
+        return {'is_successful': True, 'message': 'Success'}
+    except Exception as e:
+        print(e)
         session.rollback()
+        return {'is_successful': False, 'message': 'Database Error'}
 
 
 def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_crypto):
@@ -186,27 +179,79 @@ def get_transaction_history(discord_id):
     return transactions
 
 
-def reset(discord_id):
-    bal_upd = (
-        update(transaction).where(
-            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
-            volume=50000)
+'''ALERTS'''
+
+
+def create_alert(channel_id, asset, is_crypto, is_less_than, price):
+    a_ins = alert.insert().values(channel_id=channel_id,
+                                  asset_code=asset,
+                                  is_crypto=is_crypto,
+                                  price_per_unit=price,
+                                  is_less_than=is_less_than)
+
+    return execute_write(a_ins)
+
+
+def get_all_alerts():
+    return session.execute(select([alert])).fetchall()
+
+
+def delete_alert(alert_id):
+    delete_alert_stmt = (
+        delete(alert).where(alert.c.id == alert_id)
     )
 
-    delete_all_transactions = (
-        delete(transaction).where(and_(transaction.c.discord_id == discord_id, transaction.c.asset_code != 'USDOLLAR'))
-    )
+    return execute_write(delete_alert_stmt)
 
-    try:
-        session.execute(bal_upd)
-        session.execute(delete_all_transactions)
-        session.flush()
-        return {'is_successful': True, 'message': 'Successfully reset balance.',
-                'available_funds': '50000'}
-    except Exception as e:
-        print(e)
-        session.rollback()
-        return {'is_successful': False, 'message': 'Error resetting account'}
+
+'''LIMIT ORDERS'''
+
+
+def create_limit_order(discord_id, channel_id, asset, volume, is_crypto, is_sale, is_less_than, price):
+    limit_ins = limit_transaction.insert().values(channel_id=channel_id,
+                                                  discord_id=discord_id,
+                                                  asset_code=asset,
+                                                  is_crypto=is_crypto,
+                                                  is_sale=is_sale,
+                                                  price_per_unit=price,
+                                                  volume=volume,
+                                                  is_less_than=is_less_than)
+
+    return execute_write(limit_ins)
+
+
+def get_limit_orders(discord_id):
+    if discord_id is None:
+        return session.execute(select([limit_transaction])).fetchall()
+    else:
+        return session.execute(select([limit_transaction]).where(
+            limit_transaction.c.discord_id == discord_id
+        )).fetchall()
+
+
+def delete_limit_order(order_id, discord_id):
+    delete_limit_stmt = (
+        delete(limit_transaction).where(and_(limit_transaction.c.id == order_id,
+                                             limit_transaction.c.discord_id == discord_id))
+    )
+    return execute_write(delete_limit_stmt)
+
+
+'''USERS'''
+
+
+def initialize_new_user(discord_id):
+    ins = user.insert().values(discord_id=discord_id)
+    session.execute(ins)
+
+    init_insert = transaction.insert().values(discord_id=discord_id,
+                                              asset_code='USDOLLAR',
+                                              volume=50000,
+                                              price_per_unit=1,
+                                              is_sale=0,
+                                              is_crypto=0)
+
+    execute_write(init_insert)
 
 
 def get_all_users():
@@ -234,84 +279,24 @@ def get_display_name(discord_id):
     return x[0].display_name
 
 
-# ALERTS
+def reset(discord_id):
+    bal_upd = (
+        update(transaction).where(
+            and_(transaction.c.discord_id == discord_id, transaction.c.asset_code == 'USDOLLAR')).values(
+            volume=50000)
+    )
 
-def create_alert(channel_id, asset, is_crypto, is_less_than, price):
-    a_ins = alert.insert().values(channel_id=channel_id,
-                                  asset_code=asset,
-                                  is_crypto=is_crypto,
-                                  price_per_unit=price,
-                                  is_less_than=is_less_than)
-
-    try:
-        session.execute(a_ins)
-        session.flush()
-        return {'is_successful': True, 'message': 'Successful'}
-    except Exception as e:
-        print(e)
-        session.rollback()
-        return {'is_successful': False, 'message': 'Database Error'}
-
-
-def get_all_alerts():
-    return session.execute(select([alert])).fetchall()
-
-
-def delete_alert(alert_id):
-    delete_alert_stmt = (
-        delete(alert).where(alert.c.id == alert_id)
+    delete_all_transactions = (
+        delete(transaction).where(and_(transaction.c.discord_id == discord_id, transaction.c.asset_code != 'USDOLLAR'))
     )
 
     try:
-        session.execute(delete_alert_stmt)
+        session.execute(bal_upd)
+        session.execute(delete_all_transactions)
         session.flush()
-        return {'is_successful': True, 'message': 'Success'}
+        return {'is_successful': True, 'message': 'Successfully reset balance.',
+                'available_funds': '50000'}
     except Exception as e:
         print(e)
         session.rollback()
-        return {'is_successful': False, 'message': 'Database Error'}
-
-
-def create_limit_order(discord_id, channel_id, asset, volume, is_crypto, is_sale, is_less_than, price):
-    limit_ins = limit_transaction.insert().values(channel_id=channel_id,
-                                                  discord_id=discord_id,
-                                                  asset_code=asset,
-                                                  is_crypto=is_crypto,
-                                                  is_sale=is_sale,
-                                                  price_per_unit=price,
-                                                  volume=volume,
-                                                  is_less_than=is_less_than)
-
-    try:
-        session.execute(limit_ins)
-        session.flush()
-        return {'is_successful': True, 'message': 'Successful'}
-    except Exception as e:
-        print(e)
-        session.rollback()
-        return {'is_successful': False, 'message': 'Database Error'}
-
-
-def get_limit_orders(discord_id):
-    if discord_id is None:
-        return session.execute(select([limit_transaction])).fetchall()
-    else:
-        return session.execute(select([limit_transaction]).where(
-            limit_transaction.c.discord_id == discord_id
-        )).fetchall()
-
-
-def delete_limit_order(order_id, discord_id):
-    delete_limit_stmt = (
-        delete(limit_transaction).where(and_(limit_transaction.c.id == order_id,
-                                             limit_transaction.c.discord_id == discord_id))
-    )
-
-    try:
-        session.execute(delete_limit_stmt)
-        session.flush()
-        return {'is_successful': True, 'message': 'Success'}
-    except Exception as e:
-        print(e)
-        session.rollback()
-        return {'is_successful': False, 'message': 'Database Error'}
+        return {'is_successful': False, 'message': 'Error resetting account'}
