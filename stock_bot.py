@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 from util import database_connector, helpers
+
 intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix='!', help_command=None, intents=intents)
