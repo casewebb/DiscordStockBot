@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 import requests
 from yahoo_fin import stock_info as si
 
-import database_connector
+from discord_bot import database_connector
 
 
 def get_crypto_price_data(code):

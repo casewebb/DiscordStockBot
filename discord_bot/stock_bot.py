@@ -4,8 +4,7 @@ import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-import database_connector
-import helpers
+from discord_bot import database_connector, helpers
 
 intents = discord.Intents.default()
 intents.members = True
