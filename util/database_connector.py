@@ -87,9 +87,9 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
     if users == 0:
         initialize_new_user(discord_id)
 
-    available_bal = get_asset_units(discord_id, 'USDOLLAR')[0]
+    available_bal = round(get_asset_units(discord_id, 'USDOLLAR')[0], 30)
     if is_sale == 0:
-        purchase_req_price = price_per_unit * volume
+        purchase_req_price = round(price_per_unit * volume, 30)
         new_bal = available_bal - purchase_req_price
         if available_bal >= purchase_req_price:
             bal_upd = (
