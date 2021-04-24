@@ -1,8 +1,10 @@
 import os
 
 import discord
+import logging
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from urllib3.exceptions import NewConnectionError
 
 from util import database_connector, helpers
 
@@ -10,6 +12,7 @@ intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix='!', help_command=None, intents=intents)
 load_dotenv()
+logging.basicConfig(filename='stock_bot_log.log', level=logging.INFO)
 
 TOKEN = os.getenv('TOKEN')
 
@@ -264,19 +267,24 @@ async def delete_order_cmd(ctx, order_id):
 '''BACKGROUND TASKS'''
 
 
-@tasks.loop(minutes=5)
+@tasks.loop(seconds=10)
 async def check_alerts():
     alerts = database_connector.get_all_alerts()
     for a in alerts:
+        print('Checking alert ' + str(a))
         channel = bot.get_channel(int(a.channel_id))
         if channel is None:
             return
         try:
             current_price = helpers.get_crypto_price_data(a.asset_code)['current_price'] if a.is_crypto \
                 else helpers.get_stock_price_data(a.asset_code)['current_price']
-        except Exception:
+        except NewConnectionError as e:
+            logging.error('Error with alert: ' + str(e))
+            return
+        except Exception as e:
             await channel.send('Issue with alert ' + str(a.id) + ' it will be deleted.')
             await channel.send(helpers.format_alerts(a.channel_id))
+            logging.error('Error with alert: ' + str(e))
             database_connector.delete_alert(a.id)
             return
         if a.is_less_than:
@@ -307,9 +315,13 @@ async def check_limit_orders():
         try:
             current_price = helpers.get_crypto_price_data(o.asset_code)['current_price'] if o.is_crypto \
                 else helpers.get_stock_price_data(o.asset_code)['current_price']
-        except Exception:
+        except NewConnectionError as e:
+            logging.error('Error with order: ' + str(e))
+            return
+        except Exception as e:
             await channel.send('Issue with ' + display_name + '\'s order ' + str(o.id) + ' it will be deleted.')
             await channel.send(helpers.format_limit_orders(o.discord_id))
+            logging.error('Error with order: ' + str(e))
             database_connector.delete_limit_order(o.id, o.discord_id)
             return
         if o.is_less_than:

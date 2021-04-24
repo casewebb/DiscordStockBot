@@ -3,10 +3,13 @@ from sqlalchemy import create_engine, Table, Column, Integer, Float, String, Dat
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
+import logging
+
 meta = MetaData()
 engine = create_engine("mysql://root:admin@localhost/discord_stock_bot", pool_recycle=3600, pool_pre_ping=True)
 Session = sessionmaker(bind=engine, autocommit=True)
 session = Session()
+logging.basicConfig(filename='stock_bot_log.log', level=logging.INFO)
 
 user = Table(
     'user', meta,
@@ -87,9 +90,12 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
     if users == 0:
         initialize_new_user(discord_id)
 
-    available_bal = round(get_asset_units(discord_id, 'USDOLLAR')[0], 30)
+    bal = get_asset_units(discord_id, 'USDOLLAR')[0]
+    logging.info('BALANCE FROM DB: ' + str(bal))
+    available_bal = round(bal, 30)
     if is_sale == 0:
         purchase_req_price = round(price_per_unit * volume, 30)
+        logging.info("CALCULATED REQUIRED FUNDS: " + str(purchase_req_price))
         new_bal = available_bal - purchase_req_price
         if available_bal >= purchase_req_price:
             bal_upd = (
@@ -98,6 +104,7 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
                     volume=new_bal)
             )
         else:
+            logging.error('Too POOR BUG')
             return {'is_successful': False,
                     'message': 'Insufficient Funds',
                     'transaction_cost': purchase_req_price,

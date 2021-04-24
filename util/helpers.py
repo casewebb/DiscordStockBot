@@ -1,9 +1,12 @@
 from datetime import datetime, timezone, timedelta
 
+import logging
 import requests
 from yahoo_fin import stock_info as si
 
 from util import database_connector
+
+logging.basicConfig(filename='stock_bot_log.log', level=logging.INFO)
 
 
 def get_crypto_price_data(code):
@@ -82,6 +85,7 @@ def get_wsb_hits(code):
 
 
 def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
+    logging.info('PRICE IN: ' + str(price))
     price = float(price)
     info = database_connector.get_asset_units(discord_id, asset)
     avg_price = info[1]
@@ -90,6 +94,7 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
             volume = info[0]
         else:
             volume = database_connector.get_asset_units(discord_id, 'USDOLLAR')[0] / price
+            logging.info('ESTIMATED PURCHASABLE MAX VOL: ' + str(volume))
     elif '$' in amount:
         if float(amount.replace('$', '')) <= 0:
             return "You can only trade positive amounts of an asset."
@@ -99,6 +104,7 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
             return "You can only trade positive amounts of an asset."
         volume = float(amount)
     total = volume * price
+    logging.info('Calculated total: ' + str(total))
     net_p_l = total - (volume * avg_price)
 
     transaction_result = database_connector.make_transaction(discord_id, asset, volume, price, is_sale, is_crypto)
