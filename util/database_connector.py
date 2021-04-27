@@ -4,8 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 
 import logging
+from decimal import *
 
 meta = MetaData()
+getcontext().prec = 30
+getcontext().rounding = ROUND_DOWN
 engine = create_engine("mysql://root:admin@localhost/discord_stock_bot", pool_recycle=3600, pool_pre_ping=True)
 Session = sessionmaker(bind=engine, autocommit=True)
 session = Session()
@@ -90,11 +93,10 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
     if users == 0:
         initialize_new_user(discord_id)
 
-    bal = get_asset_units(discord_id, 'USDOLLAR')[0]
-    logging.info('BALANCE FROM DB: ' + str(bal))
-    available_bal = round(bal, 30)
+    available_bal = Decimal(get_asset_units(discord_id, 'USDOLLAR')[0])
+    logging.info('BALANCE FROM DB: ' + str(available_bal))
     if is_sale == 0:
-        purchase_req_price = round(price_per_unit * volume, 30)
+        purchase_req_price = Decimal(price_per_unit * volume)
         logging.info("CALCULATED REQUIRED FUNDS: " + str(purchase_req_price))
         new_bal = available_bal - purchase_req_price
         if available_bal >= purchase_req_price:
@@ -104,7 +106,7 @@ def make_transaction(discord_id, asset, volume, price_per_unit, is_sale, is_cryp
                     volume=new_bal)
             )
         else:
-            logging.error('Too POOR BUG')
+            logging.error('Too POOR BUG STILL')
             return {'is_successful': False,
                     'message': 'Insufficient Funds',
                     'transaction_cost': purchase_req_price,

@@ -5,8 +5,11 @@ import requests
 from yahoo_fin import stock_info as si
 
 from util import database_connector
+from decimal import *
 
 logging.basicConfig(filename='stock_bot_log.log', level=logging.INFO)
+getcontext().prec = 30
+getcontext().rounding = ROUND_DOWN
 
 
 def get_crypto_price_data(code):
@@ -86,23 +89,23 @@ def get_wsb_hits(code):
 
 def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_crypto):
     logging.info('PRICE IN: ' + str(price))
-    price = float(price)
+    price = Decimal(price)
     info = database_connector.get_asset_units(discord_id, asset)
-    avg_price = info[1]
+    avg_price = Decimal(info[1])
     if amount == 'max':
         if is_sale == 1:
-            volume = info[0]
+            volume = Decimal(info[0])
         else:
-            volume = database_connector.get_asset_units(discord_id, 'USDOLLAR')[0] / price
+            volume = Decimal(database_connector.get_asset_units(discord_id, 'USDOLLAR')[0]) / price
             logging.info('ESTIMATED PURCHASABLE MAX VOL: ' + str(volume))
     elif '$' in amount:
         if float(amount.replace('$', '')) <= 0:
             return "You can only trade positive amounts of an asset."
-        volume = float(amount.replace('$', '')) / price
+        volume = Decimal(amount.replace('$', '')) / price
     else:
         if float(amount) <= 0:
             return "You can only trade positive amounts of an asset."
-        volume = float(amount)
+        volume = Decimal(amount)
     total = volume * price
     logging.info('Calculated total: ' + str(total))
     net_p_l = total - (volume * avg_price)
@@ -135,8 +138,8 @@ def transact_asset(discord_id, discord_name, asset, amount, price, is_sale, is_c
             return 'Sorry {discord_name}, you\'re too poor. Available Balance: ${available_bal} ' \
                    'Transaction Cost: ${cost}'.format(
                 discord_name=discord_name,
-                available_bal=transaction_result.get('available_funds'),
-                cost=transaction_result.get('transaction_cost'))
+                available_bal=round(transaction_result.get('available_funds'), 3),
+                cost=round(transaction_result.get('transaction_cost'), 3))
         elif transaction_result.get('message') == 'Insufficient Shares':
             return 'Sorry {discord_name}, you don\'t own enough {asset}. Available {asset}: {available_bal} ' \
                    'Amount Requested: {cost}'.format(
@@ -174,6 +177,8 @@ def format_portfolio(assets_info):
 
     for asset in assets:
         decimals = 3 if asset['avg_price'] < 10 and asset['name'].upper() != 'USDOLLAR' else 2
+        if asset['name'].upper() == 'USDOLLAR' and asset['shares'] < .0000001:
+            continue
         p_string += '\n|{asset}|{volume}|${value}|${avg_price}|${current_price}|{pcnt_chg}|'.format(
             asset=asset['name'].upper().ljust(10),
             volume=str(round(asset['shares'], 4)).ljust(14),
